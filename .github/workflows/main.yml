@@ -35,7 +35,6 @@ jobs:
 
       - name: 4. Deteksi / Buat Keystore & Auto-Push ke Repo
         run: |
-          # Periksa apakah sudah ada file keystore (*.jks / *.keystore) di dalam repo
           KEYSTORE_FILE=$(find . -maxdepth 2 -type f \( -name "*.jks" -o -name "*.keystore" \) | head -n 1)
 
           if [ -z "$KEYSTORE_FILE" ]; then
@@ -56,7 +55,6 @@ jobs:
             echo "keyAlias=releasekey" >> keystore/keystore.properties
             echo "keyPassword=androidrelease" >> keystore/keystore.properties
 
-            # Push keystore ke repositori agar update masa depan selalu cocok signature-nya
             git config --global user.name "github-actions[bot]"
             git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git add keystore/
@@ -71,28 +69,28 @@ jobs:
           echo "SIGNING_PASS=androidrelease" >> $GITHUB_ENV
           echo "SIGNING_ALIAS=releasekey" >> $GITHUB_ENV
 
-      - name: 5. Auto-Heal Project, Auto-Version, & Injeksi Optimasi R8 Aman
+      - name: 5. Auto-Heal, Bypass Keystore Fiktif, & Optimasi R8
         env:
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
           python3 - << 'EOF'
-          import os, re
+          import os, re, shutil
 
           build_num = os.environ.get("BUILD_NUMBER", "1")
+          ks_source = os.environ.get("SIGNING_KEYSTORE", "keystore/release.jks")
 
           # 1. Pastikan local.properties ada
           android_home = os.environ.get("ANDROID_HOME", "/usr/local/lib/android/sdk")
           with open("local.properties", "w") as f:
               f.write(f"sdk.dir={android_home}\n")
 
-          # 2. Perbaiki gradle.properties (Hapus flag usang android.enableR8)
+          # 2. Bersihkan flag usang di gradle.properties
           gradle_props = "gradle.properties"
           props_content = ""
           if os.path.exists(gradle_props):
               with open(gradle_props, "r") as f:
                   props_content = f.read()
 
-          # Bersihkan opsi usang yang menyebabkan crash di AGP 7+ / 8+ / 9+
           props_content = re.sub(r'android\.enableR8\s*=\s*.*?\n', '\n', props_content)
 
           opt_flags = [
@@ -115,7 +113,7 @@ jobs:
               with open(proguard_path, "w") as f:
                   f.write("-dontwarn **\n-keepattributes *Annotation*,Signature\n")
 
-          # 4. Modifikasi build.gradle / build.gradle.kts untuk Auto-Version & Minify
+          # 4. Modifikasi build.gradle / build.gradle.kts
           target_build = "app/build.gradle.kts"
           if not os.path.exists(target_build):
               if os.path.exists("app/build.gradle"):
@@ -128,6 +126,25 @@ jobs:
           if os.path.exists(target_build):
               with open(target_build, "r") as f:
                   content = f.read()
+
+              # --- FIX UTAMA: Tangani Keystore Fiktif bawaan AI Studio ---
+              # Deteksi file keystore yang dipanggil oleh script (misal: my-upload-key.jks)
+              ks_matches = re.findall(r'[\'"]([^\'"]+\.(?:jks|keystore))[\'"]', content)
+              if os.path.exists(ks_source):
+                  for ks in ks_matches:
+                      ks_filename = os.path.basename(ks)
+                      for loc in [ks_filename, os.path.join("app", ks_filename), ks]:
+                          try:
+                              os.makedirs(os.path.dirname(loc) or ".", exist_ok=True)
+                              if not os.path.exists(loc):
+                                  shutil.copy(ks_source, loc)
+                                  print(f"[AUTO-FIX] Menyalin {ks_source} -> {loc} agar Gradle tidak error!")
+                          except Exception as e:
+                              pass
+
+              # Netralkan signingConfig di build.gradle agar Gradle tidak crash saat packageRelease.
+              # Signing sesungguhnya akan dieksekusi secara aman oleh apksigner di Langkah 8.
+              content = re.sub(r'(?m)^(\s*)(signingConfig\s*=?\s*signingConfigs.*)$', r'\1// [CI AUTO-FIX] \2', content)
 
               # Peningkatan Versi Otomatis
               content = re.sub(r'versionCode\s+\d+', f'versionCode {build_num}', content)
@@ -165,7 +182,6 @@ jobs:
 
       - name: 7. Compile Release APK (Khusus Arsitektur arm64-v8a)
         run: |
-          # Eksekusi build menggunakan GRADLE_BIN dinamis dengan filter ABI arm64-v8a
           $GRADLE_BIN assembleRelease \
             --no-daemon \
             --stacktrace \
@@ -183,7 +199,7 @@ jobs:
           # 1. Zipalign APK
           zipalign -p -f 4 "$RAW_APK" aligned.apk
 
-          # 2. Tandatangani APK dengan apksigner
+          # 2. Tandatangani APK resmi dengan apksigner
           apksigner sign \
             --ks "$SIGNING_KEYSTORE" \
             --ks-pass pass:"$SIGNING_PASS" \
@@ -192,10 +208,10 @@ jobs:
             --out app-arm64-v8a-ultra-release.apk \
             aligned.apk
 
-          # 3. Verifikasi signature APK
+          # 3. Verifikasi tanda tangan APK
           apksigner verify app-arm64-v8a-ultra-release.apk
 
-          echo "Ukuran APK Final:"
+          echo "Ukuran APK Final Berhasil Dibuat:"
           ls -lh app-arm64-v8a-ultra-release.apk
 
       - name: 9. Unggah Artefak (1 File Tunggal & Mendukung Timpa Update)
