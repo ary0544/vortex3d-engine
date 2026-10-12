@@ -71,7 +71,7 @@ jobs:
           echo "SIGNING_PASS=androidrelease" >> $GITHUB_ENV
           echo "SIGNING_ALIAS=releasekey" >> $GITHUB_ENV
 
-      - name: 5. Auto-Heal Project, Auto-Version, & Injeksi Optimasi R8
+      - name: 5. Auto-Heal Project, Auto-Version, & Injeksi Optimasi R8 Aman
         env:
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
@@ -85,17 +85,18 @@ jobs:
           with open("local.properties", "w") as f:
               f.write(f"sdk.dir={android_home}\n")
 
-          # 2. Paksa R8 Full Mode & Optimasi di gradle.properties
+          # 2. Perbaiki gradle.properties (Hapus flag usang android.enableR8)
           gradle_props = "gradle.properties"
           props_content = ""
           if os.path.exists(gradle_props):
               with open(gradle_props, "r") as f:
                   props_content = f.read()
 
+          # Bersihkan opsi usang yang menyebabkan crash di AGP 7+ / 8+ / 9+
+          props_content = re.sub(r'android\.enableR8\s*=\s*.*?\n', '\n', props_content)
+
           opt_flags = [
               "android.useAndroidX=true",
-              "android.enableR8=true",
-              "android.enableR8.fullMode=true",
               "org.gradle.jvmargs=-Xmx2048m -XX:+UseG1GC -Dfile.encoding=UTF-8"
           ]
           for flag in opt_flags:
@@ -114,11 +115,13 @@ jobs:
               with open(proguard_path, "w") as f:
                   f.write("-dontwarn **\n-keepattributes *Annotation*,Signature\n")
 
-          # 4. Modifikasi build.gradle / build.gradle.kts untuk Auto-Version & R8
-          target_build = "app/build.gradle"
+          # 4. Modifikasi build.gradle / build.gradle.kts untuk Auto-Version & Minify
+          target_build = "app/build.gradle.kts"
           if not os.path.exists(target_build):
-              if os.path.exists("app/build.gradle.kts"):
-                  target_build = "app/build.gradle.kts"
+              if os.path.exists("app/build.gradle"):
+                  target_build = "app/build.gradle"
+              elif os.path.exists("build.gradle.kts"):
+                  target_build = "build.gradle.kts"
               elif os.path.exists("build.gradle"):
                   target_build = "build.gradle"
 
@@ -126,13 +129,13 @@ jobs:
               with open(target_build, "r") as f:
                   content = f.read()
 
-              # --- PENINGKATAN VERSI OTOMATIS (Mendukung Groovy & Kotlin DSL) ---
+              # Peningkatan Versi Otomatis
               content = re.sub(r'versionCode\s+\d+', f'versionCode {build_num}', content)
               content = re.sub(r'versionCode\s*=\s*\d+', f'versionCode = {build_num}', content)
               content = re.sub(r'versionName\s+["\'][^"\']+["\']', f'versionName "1.0.{build_num}"', content)
               content = re.sub(r'versionName\s*=\s*["\'][^"\']+["\']', f'versionName = "1.0.{build_num}"', content)
 
-              # --- AKTIFKAN R8 & RESOURCE SHRINKING ---
+              # Aktifkan Minify & Shrink Resources jika bernilai false
               content = re.sub(r'minifyEnabled\s+false', 'minifyEnabled true', content)
               content = re.sub(r'shrinkResources\s+false', 'shrinkResources true', content)
               content = re.sub(r'isMinifyEnabled\s*=\s*false', 'isMinifyEnabled = true', content)
@@ -144,18 +147,26 @@ jobs:
               print(f"File {target_build} sukses diperbarui: versionCode={build_num}, versionName=1.0.{build_num}")
           EOF
 
-      - name: 6. Validasi & Regenerasi Gradle Wrapper jika Hilang
+      - name: 6. Validasi Wrapper & Tentukan Eksekutor Gradle
         run: |
           if [ ! -f "./gradlew" ]; then
-            echo "Gradle wrapper tidak ditemukan! Membangun wrapper baru..."
-            gradle wrapper --gradle-version 8.7 --distribution-type bin || true
+            echo "Mencoba generate gradle wrapper baru..."
+            gradle wrapper || true
           fi
-          chmod +x ./gradlew || true
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            echo "GRADLE_BIN=./gradlew" >> $GITHUB_ENV
+            echo "Menggunakan wrapper: ./gradlew"
+          else
+            echo "GRADLE_BIN=gradle" >> $GITHUB_ENV
+            echo "Wrapper tidak ditemukan, fallback menggunakan: gradle sistem"
+          fi
 
       - name: 7. Compile Release APK (Khusus Arsitektur arm64-v8a)
         run: |
-          # Build APK release khusus arsitektur arm64-v8a untuk ukuran paling minimal
-          ./gradlew assembleRelease \
+          # Eksekusi build menggunakan GRADLE_BIN dinamis dengan filter ABI arm64-v8a
+          $GRADLE_BIN assembleRelease \
             --no-daemon \
             --stacktrace \
             -Pandroid.injected.build.abi=arm64-v8a
@@ -170,7 +181,7 @@ jobs:
           echo "APK Ditemukan: $RAW_APK"
 
           # 1. Zipalign APK
-          zipalign -p -f -v 4 "$RAW_APK" unaligned-signed.apk
+          zipalign -p -f 4 "$RAW_APK" aligned.apk
 
           # 2. Tandatangani APK dengan apksigner
           apksigner sign \
@@ -179,7 +190,7 @@ jobs:
             --ks-key-alias "$SIGNING_ALIAS" \
             --key-pass pass:"$SIGNING_PASS" \
             --out app-arm64-v8a-ultra-release.apk \
-            unaligned-signed.apk
+            aligned.apk
 
           # 3. Verifikasi signature APK
           apksigner verify app-arm64-v8a-ultra-release.apk
@@ -193,4 +204,4 @@ jobs:
           name: app-arm64-v8a-release
           path: app-arm64-v8a-ultra-release.apk
           if-no-files-found: error
-          overwrite: true # Menimpa file artefak lama jika build ulang dijalankan
+          overwrite: true
