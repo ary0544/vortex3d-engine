@@ -1,0 +1,6 @@
+{
+  "summary": "Rencana implementasi UI adaptif Vortex3D bergaya Godot Engine 4 Mobile, mencakup:\n- Lobby / Project Hub: Project Manager untuk membuat scene baru, mengelola daftar proyek, dan memilih template (Blank 3D, FPS Arena, Physics Sandbox, dll.).\n- Collapsible Dock Panels ala Godot 4: Dock kiri (Scene/Hierarchy), dock kanan (Inspector/Node), dan bottom drawer (Console/Assets/File Manager) yang dapat di-collapse untuk memaksimalkan ruang Viewport 3D.\n- Skala adaptif & compact density: Penyesuaian tipografi dinamis, padding hemat ruang, dan touch target responsif untuk HP portrait, landscape, foldable, dan tablet.\n- Resolusi crash kestabilan: Verifikasi key unik pada semua LazyColumn/LazyRow di seluruh modul UI.",
+  "updatedAt": "2026-10-12T15:06:10.323381233Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

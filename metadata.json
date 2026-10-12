@@ -1,0 +1,6 @@
+{
+  "name": "Vortex3D",
+  "description": "A high-performance 3D game engine for mobile devices with real-time physics, custom GLSL shaders, Lua scripting runtime, asset management system, drag-and-drop scene editor, and high-thinking AI co-pilot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
