@@ -127,8 +127,7 @@ jobs:
               with open(target_build, "r") as f:
                   content = f.read()
 
-              # --- FIX UTAMA: Tangani Keystore Fiktif bawaan AI Studio ---
-              # Deteksi file keystore yang dipanggil oleh script (misal: my-upload-key.jks)
+              # Tangani keystore fiktif bawaan template AI Studio
               ks_matches = re.findall(r'[\'"]([^\'"]+\.(?:jks|keystore))[\'"]', content)
               if os.path.exists(ks_source):
                   for ks in ks_matches:
@@ -142,8 +141,7 @@ jobs:
                           except Exception as e:
                               pass
 
-              # Netralkan signingConfig di build.gradle agar Gradle tidak crash saat packageRelease.
-              # Signing sesungguhnya akan dieksekusi secara aman oleh apksigner di Langkah 8.
+              # Netralkan signingConfig internal gradle agar tidak crash saat packageRelease
               content = re.sub(r'(?m)^(\s*)(signingConfig\s*=?\s*signingConfigs.*)$', r'\1// [CI AUTO-FIX] \2', content)
 
               # Peningkatan Versi Otomatis
@@ -189,12 +187,24 @@ jobs:
 
       - name: 8. Alignment & Penandatanganan APK (1 File Final)
         run: |
-          RAW_APK=$(find . -path "*/build/outputs/apk/release/*.apk" | head -n 1)
+          echo "Memindai seluruh file APK hasil build..."
+          find . -type f -name "*.apk"
+
+          # Cari APK rilis arm64 secara fleksibel di semua folder
+          RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*ultra*" | grep -i "release" | grep -i "arm64" | head -n 1)
           if [ -z "$RAW_APK" ]; then
-            echo "ERROR: APK release tidak ditemukan!"
+            RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*ultra*" | grep -i "release" | head -n 1)
+          fi
+          if [ -z "$RAW_APK" ]; then
+            RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*ultra*" | head -n 1)
+          fi
+
+          if [ -z "$RAW_APK" ]; then
+            echo "ERROR: File APK tidak ditemukan!"
             exit 1
           fi
-          echo "APK Ditemukan: $RAW_APK"
+
+          echo "APK Terpilih: $RAW_APK"
 
           # 1. Zipalign APK
           zipalign -p -f 4 "$RAW_APK" aligned.apk
@@ -211,7 +221,7 @@ jobs:
           # 3. Verifikasi tanda tangan APK
           apksigner verify app-arm64-v8a-ultra-release.apk
 
-          echo "Ukuran APK Final Berhasil Dibuat:"
+          echo "SUKSES! Ukuran APK Final:"
           ls -lh app-arm64-v8a-ultra-release.apk
 
       - name: 9. Unggah Artefak (1 File Tunggal & Mendukung Timpa Update)
