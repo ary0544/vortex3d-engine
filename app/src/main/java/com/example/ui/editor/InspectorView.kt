@@ -18,16 +18,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Transform
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -212,6 +217,11 @@ fun InspectorView(
 
         // 3. Lua Script Section
         val luaComp = selectedEntity.luaScript
+        var showScriptPicker by remember { mutableStateOf(false) }
+        var showNewScriptDialog by remember { mutableStateOf(false) }
+        var newScriptName by remember { mutableStateOf("") }
+        var selectedTemplate by remember { mutableStateOf("hero") }
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -242,45 +252,189 @@ fun InspectorView(
                 Spacer(Modifier.height(6.dp))
 
                 if (luaComp != null) {
-                    Text("Script: ${luaComp.scriptName}", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(6.dp))
-                    Button(
-                        onClick = {
-                            val scriptAsset = viewModel.assetManager.scripts[luaComp.scriptId]
-                                ?: com.example.engine.lua.LuaScriptAsset(
-                                    luaComp.scriptId,
-                                    luaComp.scriptName,
-                                    "Custom",
-                                    luaComp.scriptContent
-                                )
-                            viewModel.editScript(scriptAsset)
-                        },
-                        modifier = Modifier.fillMaxWidth().testTag("open_lua_ide_button")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFF161B22))
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Edit in Lua Code IDE", fontSize = 12.sp)
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(if (luaComp.isEnabled) Color(0xFF00E676) else Color(0xFFFF5252))
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(luaComp.scriptName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            }
+                            Text("ID: ${luaComp.scriptId}", fontSize = 10.sp, color = Color(0xFF8B949E))
+                        }
+
+                        // Detach button
+                        IconButton(
+                            onClick = { viewModel.detachScriptFromSelectedEntity() },
+                            modifier = Modifier.size(28.dp).testTag("detach_script_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LinkOff,
+                                contentDescription = "Lepas Script",
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val scriptAsset = viewModel.assetManager.scripts[luaComp.scriptId]
+                                    ?: com.example.engine.lua.LuaScriptAsset(
+                                        luaComp.scriptId,
+                                        luaComp.scriptName,
+                                        "Custom",
+                                        luaComp.scriptContent
+                                    )
+                                viewModel.editScript(scriptAsset)
+                            },
+                            modifier = Modifier.weight(1f).testTag("open_lua_ide_button")
+                        ) {
+                            Text("Edit di Lua IDE", fontSize = 11.sp)
+                        }
+
+                        OutlinedButton(
+                            onClick = { showScriptPicker = true },
+                            modifier = Modifier.weight(1f).testTag("change_script_button")
+                        ) {
+                            Text("Ganti Script", fontSize = 11.sp)
+                        }
                     }
                 } else {
-                    OutlinedButton(
-                        onClick = {
-                            val defaultScript = viewModel.assetManager.scripts["script_hero"]
-                            if (defaultScript != null) {
-                                viewModel.updateSelectedEntity {
-                                    it.copy(
-                                        luaScript = com.example.engine.model.LuaScriptComponent(
-                                            scriptId = defaultScript.id,
-                                            scriptName = defaultScript.name,
-                                            scriptContent = defaultScript.content
-                                        )
-                                    )
-                                }
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { showScriptPicker = true },
+                            modifier = Modifier.fillMaxWidth().testTag("attach_lua_script_button"),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1))
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("+ Attach Script Lua ke Entitas", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        DropdownMenu(
+                            expanded = showScriptPicker,
+                            onDismissRequest = { showScriptPicker = false }
+                        ) {
+                            Text(
+                                text = "Pilih Script untuk Dipasang:",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                color = Color(0xFF00E5FF)
+                            )
+
+                            viewModel.assetManager.scripts.values.forEach { scriptAsset ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(scriptAsset.name, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                            Text(scriptAsset.description, fontSize = 10.sp, color = Color.Gray, maxLines = 1)
+                                        }
+                                    },
+                                    onClick = {
+                                        viewModel.attachScriptToSelectedEntity(scriptAsset.id)
+                                        showScriptPicker = false
+                                    }
+                                )
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Attach Lua Script", fontSize = 12.sp)
+
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF00E676), modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(6.dp))
+                                        Text("Buat Script Baru...", color = Color(0xFF00E676), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                },
+                                onClick = {
+                                    showScriptPicker = false
+                                    newScriptName = "${selectedEntity.name}_Script"
+                                    showNewScriptDialog = true
+                                }
+                            )
+                        }
                     }
                 }
             }
+        }
+
+        if (showNewScriptDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showNewScriptDialog = false },
+                title = { Text("Buat & Pasang Script Lua", fontSize = 14.sp, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = newScriptName,
+                            onValueChange = { newScriptName = it },
+                            label = { Text("Nama Script") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text("Pilih Template Dasar:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        listOf(
+                            "hero" to "🎮 TPP Hero / Character Controller",
+                            "orbit" to "🔄 Orbit / Rotasi Objek 3D",
+                            "terrain" to "⛰️ Permukaan Tanah GLB / Collider",
+                            "custom" to "📝 Blank Script Kosong"
+                        ).forEach { (type, label) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedTemplate = type }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = selectedTemplate == type,
+                                    onClick = { selectedTemplate = type }
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(label, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.createAndAttachScript(
+                                name = if (newScriptName.isBlank()) "entity_script" else newScriptName,
+                                templateType = selectedTemplate
+                            )
+                            showNewScriptDialog = false
+                        }
+                    ) {
+                        Text("Buat & Attach", fontSize = 12.sp)
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showNewScriptDialog = false }) {
+                        Text("Batal", fontSize = 12.sp)
+                    }
+                }
+            )
         }
 
         Spacer(Modifier.height(12.dp))

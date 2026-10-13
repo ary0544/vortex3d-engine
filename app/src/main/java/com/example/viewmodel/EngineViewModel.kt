@@ -34,6 +34,11 @@ import kotlinx.coroutines.launch
 
 import com.example.engine.model.GlbParser
 import java.io.File
+import android.content.Context
+import android.content.ClipboardManager
+import android.content.ClipData
+import android.widget.Toast
+import com.example.engine.model.LuaScriptComponent
 
 enum class WorkspaceTab {
     SCENE_VIEW,
@@ -498,6 +503,82 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
             }
             log("Lua", "Saved script: ${updated.name}")
         }
+    }
+
+    fun attachScriptToEntity(entityId: String, scriptId: String) {
+        val script = assetManager.scripts[scriptId] ?: return
+        val entity = _scene.value.findEntity(entityId) ?: return
+        val updatedComp = LuaScriptComponent(
+            scriptId = script.id,
+            scriptName = script.name,
+            scriptContent = script.content,
+            isEnabled = true
+        )
+        _scene.value = _scene.value.copy(
+            entities = _scene.value.entities.map {
+                if (it.id == entityId) it.copy(luaScript = updatedComp) else it
+            }
+        )
+        log("Lua", "✓ Script '${script.name}' terpasang ke '${entity.name}'")
+    }
+
+    fun attachScriptToSelectedEntity(scriptId: String) {
+        val sel = _selectedEntityId.value
+        if (sel != null) {
+            attachScriptToEntity(sel, scriptId)
+        } else {
+            log("Lua", "Pilih entitas terlebih dahulu untuk memasang script")
+        }
+    }
+
+    fun detachScriptFromSelectedEntity() {
+        val sel = _selectedEntityId.value ?: return
+        val entity = _scene.value.findEntity(sel) ?: return
+        _scene.value = _scene.value.copy(
+            entities = _scene.value.entities.map {
+                if (it.id == sel) it.copy(luaScript = null) else it
+            }
+        )
+        log("Lua", "Script dilepas dari entitas '${entity.name}'")
+    }
+
+    fun createAndAttachScript(name: String, templateType: String = "custom") {
+        val sel = _selectedEntityId.value ?: return
+        val scriptId = "script_${LogIdCounter.nextId()}"
+        val content = when (templateType) {
+            "hero" -> com.example.engine.lua.LuaScriptLibrary.defaultScripts.find { it.id == "script_hero" }?.content
+                ?: "-- Controller\nfunction update(dt)\nend\n"
+            "orbit" -> com.example.engine.lua.LuaScriptLibrary.defaultScripts.find { it.id == "script_orbit" }?.content
+                ?: "-- Orbit\nfunction update(dt)\n    entity:rotate(0, 45.0 * dt, 0)\nend\n"
+            "terrain" -> com.example.engine.lua.LuaScriptLibrary.defaultScripts.find { it.id == "script_terrain" }?.content
+                ?: "-- Terrain\nfunction on_collision(other)\nend\n"
+            else -> "-- Script: $name\nfunction init()\n    engine:log(\"$name diinisialisasi\")\nend\n\nfunction update(dt)\n    -- Logika frame\nend\n\nfunction on_collision(other)\n    engine:log(\"Tabrakan dengan: \" .. other)\nend\n"
+        }
+        val asset = LuaScriptAsset(id = scriptId, name = name, description = "Dibuat untuk entitas", content = content)
+        assetManager.scripts[scriptId] = asset
+        attachScriptToSelectedEntity(scriptId)
+        editScript(asset)
+    }
+
+    fun copyToClipboard(context: Context, text: String, label: String = "Teks") {
+        try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText(label, text)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(context, "$label disalin ke clipboard", Toast.LENGTH_SHORT).show()
+            log("Clipboard", "✓ $label disalin ke clipboard (${text.take(35)}...)")
+        } catch (e: Exception) {
+            log("Clipboard", "Gagal menyalin: ${e.message}")
+        }
+    }
+
+    fun getFormattedLogs(): String {
+        return _consoleLogs.value.joinToString("\n") { "[${it.timestamp}] [${it.tag}] ${it.message}" }
+    }
+
+    fun clearConsoleLogs() {
+        _consoleLogs.value = emptyList()
+        log("Console", "Console log dibersihkan.")
     }
 
     fun editShader(shader: ShaderProgram) {

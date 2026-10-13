@@ -188,7 +188,7 @@ private fun ShaderDoc() {
 private fun TutorialsDoc(viewModel: EngineViewModel) {
     DocCard(title = "Tutorial 1: Physics Playground Sandbox") {
         Text(
-            text = "Experience stacked destructible crates, a dynamic player orb, and a rotating holographic portal.",
+            text = "Menampilkan simulasi balok yang dapat ditabrak, bola dinamis, dan portal berputar dengan efek visual holografis.",
             fontSize = 12.sp
         )
         Spacer(Modifier.height(6.dp))
@@ -200,8 +200,29 @@ private fun TutorialsDoc(viewModel: EngineViewModel) {
         ) {
             Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Open Scene in 3D Viewport", fontSize = 12.sp)
+            Text("Buka Scene di 3D Viewport", fontSize = 12.sp)
         }
+    }
+
+    Spacer(Modifier.height(10.dp))
+
+    DocCard(title = "Tutorial 2: Build Game Open-World, Kamera TPP & Kostum GLB") {
+        Text(
+            text = "Langkah membangun open-world dengan karakter TPP kostum GLB & permukaan dunia:\n\n" +
+                    "1. Struktur Folder Rekomendasi:\n" +
+                    "   • Kostum Karakter: assets/models/characters/\n" +
+                    "   • Permukaan Terrain: assets/models/world/terrain/\n\n" +
+                    "2. Setup Karakter TPP:\n" +
+                    "   • Buka File Manager -> Pilih file .glb karakter -> Spawn ke 3D.\n" +
+                    "   • Di Inspector, aktifkan RigidBody (Mass = 1.0) dan Collider Capsule/Box.\n" +
+                    "   • Tekan '+ Attach Script Lua ke Entitas' -> pilih 'TPP Hero Controller'.\n\n" +
+                    "3. Setup Permukaan Dunia:\n" +
+                    "   • Impor file .glb terrain permukaan dunia -> Spawn ke 3D.\n" +
+                    "   • Di Inspector, atur RigidBody menjadi Static (Mass = 0) agar tidak jatuh gravitasi.\n" +
+                    "   • Karakter open-world kini dapat berjalan, melompat, dan berpijak kokoh di atas permukaan GLB!",
+            fontSize = 11.5.sp,
+            lineHeight = 17.sp
+        )
     }
 }
 

@@ -1,6 +1,6 @@
 {
-  "summary": "Rencana komprehensif optimasi performa rendering Vortex3D: Analisis akar penyebab lag (dibandingkan dengan Godot 4), implementasi render loop 60 FPS kontinu dengan Choreographer/withFrameNanos, isolasi rekomposisi Jetpack Compose di LandscapeStudioScreen, pemindahan komputasi simulasi ke Dispatchers.Default, sistem cache geometri transform, dan pemeliharaan indikator FPS HUD di viewport.",
-  "updatedAt": "2026-10-13T08:36:32.402993668Z",
+  "summary": "Rencana implementasi peningkatan fitur Vortex3D Engine:\n1. Konsol Log & Riwayat Aksi terdedikasi dengan tombol Salin Cepat ke Clipboard per-baris dan salin seluruh log.\n2. Alur terpadu Attach Script Lua langsung di Inspector entitas (pilih/buat/pasang skrip aktif) serta tombol \"Attach ke Entitas Terpilih\" di Lua Code IDE.\n3. Toolbar Landscape adaptif dengan baris scroll horizontal berpadding safe-area (insets) agar tombol tidak menciut dan penanganan immersive mode/fullscreen yang stabil saat keyboard muncul/tutup.\n4. Inspeksi detail file GLB (geometri, simpul, poligon, material, tekstur, struktur node) dengan rekomendasi penempatan aset dan tombol salin path/lokasi folder tujuan.",
+  "updatedAt": "2026-10-13T09:39:45.551812995Z",
   "requestFeedback": true,
   "userFacing": true
 }

@@ -89,6 +89,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.platform.LocalDensity
 import com.example.viewmodel.ProjectOrientation
 
 class MainActivity : ComponentActivity() {
@@ -109,8 +112,10 @@ class MainActivity : ComponentActivity() {
                 val configuration = LocalConfiguration.current
                 val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+                val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+
                 // Dynamically manage screen orientation and system navigation bar visibility
-                LaunchedEffect(isInLobby, projectOrientation) {
+                LaunchedEffect(isInLobby, projectOrientation, imeBottom) {
                     val insetsController = WindowCompat.getInsetsController(window, window.decorView)
                     insetsController.systemBarsBehavior =
                         WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -126,7 +131,9 @@ class MainActivity : ComponentActivity() {
                             ProjectOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                             ProjectOrientation.AUTO_SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
                         }
-                        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                        if (imeBottom == 0) {
+                            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                        }
                     }
                 }
 

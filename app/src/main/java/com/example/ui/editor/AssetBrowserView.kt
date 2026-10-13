@@ -265,11 +265,22 @@ private fun LuaScriptsTab(viewModel: EngineViewModel) {
                         }
                     }
 
-                    Button(
-                        onClick = { viewModel.editScript(script) },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Text("Open IDE", fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedButton(
+                            onClick = { viewModel.attachScriptToSelectedEntity(script.id) },
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text("Attach", fontSize = 10.sp)
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        Button(
+                            onClick = { viewModel.editScript(script) },
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text("IDE", fontSize = 10.sp)
+                        }
                     }
                 }
             }

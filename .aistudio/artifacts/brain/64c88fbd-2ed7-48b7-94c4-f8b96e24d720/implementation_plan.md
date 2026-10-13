@@ -1,128 +1,112 @@
-# Rencana Optimasi Performa 60 FPS & Arsitektur Render Godot 4 Mobile
+# Rencana Implementasi: Sistem Log Clipboard, Integrasi Lua Langsung, UI Landscape Scrollable, dan Panduan GLB
 
-Rencana komprehensif untuk mengatasi masalah lag dan stutter pada proyek baru Vortex3D di perangkat Android 8 (ARM64), mengadopsi arsitektur game engine seperti Godot 4 Mobile dengan **Continuous 60 FPS Render Loop**, **Cache Geometri**, dan **Isolasi Rekomposisi Jetpack Compose**.
+Implementasi ini menghadirkan perbaikan alur kerja dan ergonomi studio game Vortex3D: menambahkan sistem log konsol yang dapat disalin ke clipboard dengan 1-ketukan, tombol *Attach Lua* langsung baik dari Inspector maupun Lua IDE, toolbar landscape berbasis horizontal scroll dengan proteksi safe-insets, penanganan otomatis immersive bar saat keyboard muncul/hilang, serta kartu informasi detail struktur GLB dengan rekomendasi folder penempatan yang dapat disalin langsung.
 
-## Ringkasan Keputusan Pengguna (Clarifying Answers)
+---
+
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> - **Keluhan Utama**: Seluruh aplikasi terasa lambat/patah-patah saat membuka proyek baru, berbeda dengan Godot 4 yang sangat mulus di perangkat yang sama.
-> - **Metode Optimasi Prioritas**: **Render loop 60 FPS kontinu dengan cache geometri** — Mengimplementasikan siklus render VSync kontinu berkecepatan 60 FPS seperti engine native.
-> - **Tampilan Indikator FPS**: **Tetap** — Mempertahankan panel HUD metriks performa (FPS, Frame Time, Triangles, Vertices, Draw Calls) di pojok viewport 3D.
+> Seluruh keputusan telah diselaraskan dengan jawaban klarifikasi pengguna:
+
+- **Konsol Log & Salin Cepat**: Konsol log terdedikasi dilengkapi tombol *Salin Cepat* (salin semua log dan salin log per-baris ke clipboard Android) untuk memudahkan pelaporan bug atau penempelan ke AI.
+- **Attach Lua Dua Arah**: Tombol *Attach Script* hadir langsung di tab Inspector (dengan dialog pemilih skrip / template) dan tombol *Attach to Selected Entity* hadir langsung di header Lua IDE.
+- **Toolbar Landscape Scrollable & Safe-Area**: Top bar / toolbar mode landscape diubah menjadi baris horizontal scrollable (`Modifier.horizontalScroll()`) dengan safe-insets padding dari tepi layar/tombol navigasi HP, memastikan tombol tidak pernah mengecil secara paksa.
+- **Immersive Mode & Keyboard Fix**: Memperbaiki kontrol `WindowInsetsControllerCompat` agar saat soft-keyboard muncul dan ditutup, bar navigasi sistem kembali disembunyikan secara otomatis (`BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`) tanpa meninggalkan tombol fullscreen yang tersangkut.
+- **Info GLB Lengkap & Salin Lokasi Rekomendasi**: Menambahkan dialog inspeksi GLB yang merinci jumlah simpul, segitiga, material, sub-mesh, animasi/pbr, serta box panduan rekomendasi penempatan folder (misal: `/assets/models/characters/` untuk karakter TPP dan `/assets/models/environments/` untuk permukaan/terrain) lengkap dengan tombol salin path folder.
 
 ---
 
-## 1. Analisis Akar Masalah: Mengapa Godot 4 Mulus Sementara Vortex3D Ngelag?
+### 1. Overview & Core Concept
 
-Melalui audit mendalam pada pipeline kode sumber, ditemukan 4 penyebab utama lag:
-
-### A. Badai Rekomposisi Compose (Recomposition Storm)
-- Di `LandscapeStudioScreen.kt`, state `scene` diamati di tingkat root:
-  ```kotlin
-  val scene by viewModel.scene.collectAsState()
-  ```
-- Setiap kali simulasi berjalan atau ada pembaruan posisi (setiap 16ms), **seluruh pohon UI studio**—termasuk TopAppBar, tombol Lobby, Dock Kiri (Scene Tree), Dock Kanan (Inspector dengan puluhan slider & TextField), Dock Bawah (Console logs), dan toolbar—direkomposisi secara berulang-ulang di **Main UI Thread** Android.
-- Pada chipset Android 8 (Snapdragon 430/625, Helio P60, Exynos), overhead rekomposisi puluhan komponen Material 3 per frame memicu GC thrashing dan frame drops ekstrem.
-
-### B. Tidak Ada Dedicated Render Pulse & Ilusi "9 FPS"
-- Di `Viewport3D.kt`, kanvas 3D hanya digambar ulang secara pasif jika ada event Compose.
-- Saat idle atau jeda antar-sentuhan, pembacaan delta waktu antar frame di `EngineRenderer.kt` mencapai ~110ms (karena interval update stats di-throttle ke 350ms). Rumus `1000ms / 110ms` menghasilkan angka **9 FPS**, padahal CPU frame time murni hanya **4.0 ms**.
-- Sebaliknya, **Godot 4 Mobile** menggunakan loop render kontinu berbasis VSync (Choreographer) yang terus memompa frame dengan stabil di 60 FPS.
-
-### C. Simulasi & Skrip Berjalan di Main Thread
-- Di `EngineViewModel.kt`, loop simulasi `stepSimulation(dt)` diluncurkan di `viewModelScope` tanpa menentukan dispatcher, sehingga berjalan di `Dispatchers.Main`.
-- Perhitungan matriks fisika, raycast, dan eksekusi skrip Lua membebani Main Thread yang seharusnya menangani responsivitas sentuhan (touch event dispatch).
-
-### D. Rekalkulasi Geometri Berulang (Zero Transform Cache)
-- Semua entitas (meskipun statis/diam) terus mentransformasikan seluruh vertex buffer dan normal ke clip space pada setiap panggilan render tanpa caching matriks dunia.
+- **Apa yang Dibangun**: Pembaruan menyeluruh pada 4 modul utama editor:
+  1. **Log & Console Subsystem**: Pencatatan riwayat aksi (Engine Action Log) dengan filter (All, Lua, Physics, Render, Error) dan tombol *Copy to Clipboard* (salin log terpilih atau salin seluruh riwayat aksi untuk konsultasi ke AI).
+  2. **Direct Lua Script Attachment**: Menghubungkan entitas yang dipilih di 3D Viewport langsung dengan skrip Lua tanpa harus membuat script manual dari scratch, baik melalui Entity Inspector maupun langsung dari Lua Editor.
+  3. **Responsive Landscape Toolbar**: Toolbar atas di mode landscape menggunakan container scrollable yang menjaga ukuran touch target minimal 48dp tanpa membuat tombol menyusut (squishing), dilengkapi padding aman dari cutout kamera dan bar navigasi sistem.
+  4. **GLB Detailed Inspector & Placement Advisor**: Dialog interaktif saat file `.glb` dipilih atau diimpor di File Manager/Asset Browser yang menampilkan ringkasan data 3D dan rekomendasi penempatan struktur folder game open-world.
 
 ---
 
-## 2. Arsitektur Solusi (Godot 4 Mobile Architecture)
+### 2. User Experience & Visual Design
+
+#### A. Konsol Log & Action History (Dedicated Console Dock)
+- **Tampilan Header**: Memiliki badge jumlah log, filter chip (All, Info, Warn, Error, Lua), tombol *Clear*, dan tombol menonjol **"Salin Semua Log"** (dengan ikon clipboard & feedback visual saat tersalin).
+- **Item Baris Log**: Setiap baris log memiliki tag warna spesifik (Biru untuk Lua, Merah untuk Error, Hijau untuk Fisika, Kuning untuk Aksi Engine) dan ikon kecil **Copy** di samping teks log untuk menyalin pesan spesifik tersebut.
+
+#### B. Alur Penempelan Lua (Inspector + Lua IDE)
+- **Di Inspector**: Bagian *Lua Script Component* kini menyediakan:
+  - Tombol **"Attach Script"** dengan dropdown/menu pemilih skrip yang ada di proyek (misal: `player_controller.lua`, `terrain_collider.lua`, `orbit_camera.lua`, atau buat baru).
+  - Indikator status entitas aktif yang sedang terpasang skrip.
+  - Tombol **"Detach / Lepas"** dan **"Edit in Lua IDE"**.
+- **Di Lua Editor**: Header atas kini menampilkan tombol **"Attach ke [Nama Entitas]"** jika ada entitas yang sedang aktif dipilih di scene. Menekan tombol ini langsung menautkan skrip yang sedang diedit ke entitas tersebut dengan konfirmasi toast/log instan.
+
+#### C. Landscape Toolbar & Immersive Navigation
+- **Toolbar Scroll Horizontal**: Row atas dibungkus dalam `Modifier.horizontalScroll(rememberScrollState())` dengan `Arrangement.spacedBy(6.dp)` dan `PaddingValues(horizontal = safeInsets)`. Tombol-tombol mempertahankan ukuran tetap (tidak menciut).
+- **Perbaikan Keyboard & Fullscreen**: Penanganan listener insets (`WindowInsetsCompat.Type.ime()`) memastikan saat keyboard ditutup, sistem UI flags segera dipulihkan ke immersive sticky mode tanpa memunculkan bilah statis yang menutupi tombol game.
+
+#### D. Detail GLB & Rekomendasi Penempatan
+- **Dialog Modal Info GLB**: Saat pengguna mengetuk file `.glb` di File Manager atau Asset Browser:
+  - Menampilkan ringkasan: Ukuran file, Nama Mesh, Vertex Count, Triangle Count, PBR Material (Roughness, Metallic, Base Color), status Textures & Buffer.
+  - **Rekomendasi Folder**:
+    - Kostum Karakter: `assets/models/characters/` (Tipe: Dynamic Actor, Mesh + Rig).
+    - Permukaan / Terrain: `assets/models/world/terrain/` (Tipe: Static Ground, Mesh + Collision).
+  - Tombol **"Salin Path Folder"** untuk menyalin lokasi tujuan ke clipboard perangkat.
+  - Opsi tindakan langsung: **"Spawn Langsung sebagai Karakter TPP"**, **"Spawn sebagai Permukaan Dunia"**, atau **"Simpan ke Asset Library"**.
+
+---
+
+### 3. Key Product Decisions & Trade-Offs
+
+- **Clipboard Integration via Android System Service**: Menggunakan `android.content.ClipboardManager` melalui `LocalContext.current` untuk menyalin log dan path folder secara native dengan umpan balik pesan ringkas (Toast / Status HUD).
+- **Toolbar Non-Shrinking Policy**: Mengganti pembagian layout statis `weight()` pada toolbar dengan scrolling horizontal fleksibel. Hal ini mencegah tombol terpotong pada layar beresolusi sedang (seperti Android 8 720p/1080p).
+- **Sinkronisasi Dua Arah Scripting**: Komponen `LuaScriptComponent` diperbarui agar menyimpan referensi `scriptId` yang sinkron dengan `AssetManager.scripts`, sehingga perubahan isi di editor langsung bereaksi ke entitas runtime.
+
+---
+
+### 4. Technical Architecture & Data Strategy
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        MAIN UI THREAD (COMPOSE)                        │
-│                                                                        │
-│  TopAppBar & Docks (Scene Tree, Inspector, Console)                   │
-│  [ISOLASI REKOMPOSISI]                                                │
-│  • Hanya rekomposisi saat entitas dipilih atau tab berpindah           │
-│  • TIDAK LAGI merekomposisi saat simulasi/rotasi kamera aktif          │
-└───────────────────────────────────┬────────────────────────────────────┘
+│                        VORTEX3D STUDIO UI LAYER                        │
+├────────────────────────────────────────────────────────────────────────┤
+│  Top Landscape Toolbar (Horizontal Scroll + Safe Insets Padding)       │
+│  [Hub] [Scene] [Docks: Left|Bottom|Right] [Play] [Reset] [Wire] [Full] │
+├────────────────────────────────────────────────────────────────────────┤
+│ ┌──────────────────┐ ┌─────────────────────────┐ ┌───────────────────┐ │
+│ │  LEFT DOCK       │ │      CENTER PANE        │ │   RIGHT DOCK      │ │
+│ │  - Hierarchy     │ │   3D Viewport / Engine  │ │ - Inspector       │ │
+│ │  - Assets Browser│ │   (TPP Camera / Meshes) │ │   [+ Attach Lua]  │ │
+│ │  - File Manager  │ │                         │ │ - Lua IDE         │ │
+│ │    [GLB Info]    │ │                         │ │   [+ Attach to Ent]│ │
+│ └──────────────────┘ └─────────────────────────┘ └───────────────────┘ │
+├────────────────────────────────────────────────────────────────────────┤
+│  BOTTOM CONSOLE DOCK (Dedicated Log & Action Stream)                   │
+│  [Filter Chips] [Logs List] [Copy Row] [⚡ Copy All to Clipboard]     │
+└────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                   VIEWPORT 3D (CONTINUOUS 60 FPS LOOP)                 │
-│                                                                        │
-│  LaunchedEffect / withFrameNanos (VSync Choreographer Loop)           │
-│  • Memompa frame tepat setiap 16.6ms (60 FPS stabil)                   │
-│  • Mengurangi touch latency kamera orbit, pan, dan zoom                │
-│  • Memperbarui HUD metriks FPS secara halus & akurat                  │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                   ENGINE RENDERER + GEOMETRY CACHE                     │
-│                                                                        │
-│  • Cache Transform Matrix untuk entitas statis                         │
-│  • Zero GC object allocation (reusable flat buffer & path pooling)    │
-│  • Fast backface culling & Painter's depth sort                        │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│              BACKGROUND THREAD (Dispatchers.Default)                   │
-│                                                                        │
-│  • Physics Integration (Gravitasi, Kinematika, Velocity)               │
-│  • Lua Script Runtime Updates                                          │
+│                        VIEWMODEL & ENGINE CORE                         │
+├────────────────────────────────────────────────────────────────────────┤
+│ - EngineViewModel: attachScriptToEntity(), copyToClipboard()           │
+│ - GlbParser / StorageManager: extractGlbMetadata(), recommendPath()   │
+│ - WindowInsetsControllerCompat: Auto-rehide system bars after IME     │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 3. Komponen yang Akan Dimodifikasi
-
-### 1. `Viewport3D.kt`
-- **Tambahkan Continuous 60 FPS Frame Loop**:
-  Menggunakan `withFrameNanos { frameNanos -> ... }` di dalam `LaunchedEffect` untuk memperbarui frame tick secara konstan ketika viewport aktif.
-- **Isolasi Rekomposisi Kanvas**:
-  Gunakan `drawWithCache` atau pemisahan state lokal sehingga kanvas 3D merender frame 60 FPS tanpa memicu rekomposisi pada HUD controls, dock panel, atau layar studio utama.
-- **Optimasi Touch Gestures**:
-  Touch orbit/pan mengalirkan rotasi kamera langsung ke kamera engine tanpa lag antrian frame.
-- **HUD Performance Overlay**:
-  Pertahankan tampilan kartu performa di pojok atas (FPS, ms, tris, verts, draw calls) dengan warna dinamis (hijau di 60 FPS, kuning di 30-59 FPS).
-
-### 2. `LandscapeStudioScreen.kt`
-- **Hapus Pembacaan `val scene by viewModel.scene.collectAsState()` di Root Column**:
-  Pindahkan pembacaan scene hanya ke komponen anak yang benar-benar membutuhkannya (misalnya `SceneHierarchyTree` atau dialog tambah objek).
-- Pastikan dock kiri, dock kanan, dan top bar tidak ikut bergetar atau merekomposisi setiap frame.
-
-### 3. `EngineRenderer.kt`
-- **Perbaiki Kalkulasi FPS & Delta Waktu**:
-  Gunakan interval VSync nyata dari frame pump untuk menghitung frame rate rata-rata yang stabil (60 FPS).
-- **Geometry & Matrix Transform Cache**:
-  Simpan cache matriks dunia (`modelMatrix`) dan flag `isDirty` pada `TransformComponent`. Jika entitas tidak bergerak dan kamera tidak berputar, lewati kalkulasi ulang matriks lokal.
-- **Optimasi Depth Sort**:
-  Gunakan primitive sorting yang lebih cepat tanpa alokasi sublist untuk meminimalkan beban CPU pada Android 8.
-
-### 4. `EngineViewModel.kt`
-- **Pindahkan Simulasi ke `Dispatchers.Default`**:
-  Ubah loop simulasi fisika dan Lua script runner agar dieksekusi di background thread (`Dispatchers.Default`), kemudian sinkronkan snapshot entitas ke renderer secara thread-safe.
-- Ini membebaskan Main Thread 100% untuk UI dan rendering kanvas.
+#### Komponen yang Diperbarui:
+1. `ConsoleLogView.kt`: Menambahkan aksi salin semua log dan salin per item ke clipboard Android.
+2. `InspectorView.kt`: Menambahkan pemilih skrip dinamis dan tombol attach cepat ke entitas terpilih.
+3. `LuaEditorView.kt`: Menambahkan tombol "Attach to Selected Entity" langsung di toolbar atas editor Lua.
+4. `LandscapeStudioScreen.kt`: Membungkus tombol aksi dan toolbar atas dalam baris horizontal scrollable dengan padding insets navigasi layar.
+5. `MainActivity.kt`: Menambahkan listener penutup keyboard (IME) agar kontrol layar penuh otomatis disembunyikan kembali.
+6. `FileManagerView.kt` & `AssetBrowserView.kt`: Menambahkan tampilan info isi GLB lengkap beserta rekomendasi folder struktur dan tombol salin path.
 
 ---
 
-## 4. Status Eksekusi & Hasil Implementasi
+### Verification Plan
 
-- [x] **Fase 1: Isolasi Rekomposisi di `LandscapeStudioScreen.kt`** [SELESAI]
-  - Root `LandscapeStudioScreen` tidak lagi mengamati `scene` secara langsung (hanya mengamati `sceneName`), menghentikan badai rekomposisi 60 FPS pada 50+ komponen dock Material 3 di Main UI Thread.
-- [x] **Fase 2: Implementasi Continuous 60 FPS Render Loop di `Viewport3D.kt` & `PlayModeOverlay.kt`** [SELESAI]
-  - Menambahkan VSync ticker kontinu dengan `withFrameNanos` di `LaunchedEffect`. Kanvas 3D kini memompa frame secara stabil di 60 FPS layaknya loop render Godot 4 Mobile.
-  - Event orbit, pan, dan zoom kamera tersinkronisasi mulus tanpa jeda antrian frame.
-- [x] **Fase 3: Optimasi EngineRenderer & Geometry Cache** [SELESAI]
-  - Caching matriks lokal di `TransformComponent` (`cachedMatrix`) untuk mengeliminasi perkalian 3 matriks 4x4 berulang pada entitas statis.
-  - In-place allocation-free quicksort pada `trianglePool` menggantikan `subList.sortByDescending`, mengeliminasi 100% alokasi objek GC per frame.
-  - Perbaikan kalkulasi moving average FPS yang kebal terhadap jeda idle (>120ms), langsung memulihkan 60 FPS seketika.
-- [x] **Fase 4: Backgrounding Simulasi di `EngineViewModel.kt`** [SELESAI]
-  - Loop fisika dan runtime script Lua dipindahkan ke coroutine `Dispatchers.Default` (background thread), membebaskan 100% Main Thread untuk UI dan interaksi sentuh.
-- [x] **Fase 5: Kompilasi & Verifikasi Akhir** [SELESAI]
-  - `compile_applet` berhasil tanpa error. Panel HUD metriks FPS (`RenderStatsBadge`) tetap dipertahankan ("tetap") dengan indikator hijau 60 FPS dan frame time sub-5ms.
+- Kompilasi seluruh modul Android melalui `compile_applet` untuk memastikan kompatibilitas sintaks Compose M3 dan Kotlin.
+- Memverifikasi fungsi tombol salin clipboard pada konsol log dan dialog info GLB.
+- Memverifikasi alur attach script Lua dari Inspector maupun dari Lua Editor.
+- Memverifikasi toolbar landscape dapat digulir horizontal tanpa mengecilkan ikon pada berbagai rasio layar.

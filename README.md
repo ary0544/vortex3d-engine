@@ -171,8 +171,62 @@ end
 
 ---
 
+## 🗺️ Panduan Setup Game Open-World TPP & Aset GLB
+
+Untuk membangun game open-world dengan kamera Third-Person (TPP), kostum karakter GLB, dan permukaan terrain GLB:
+
+### 1. Struktur Folder Rekomendasi Aset GLB
+Simpan aset 3D Anda di direktori proyek yang terorganisir untuk efisiensi loading:
+- **Kostum Karakter / Hero**: `assets/models/characters/` (Tipe: Dynamic Actor, Mesh + Rig + Collider Kapsul).
+- **Permukaan Dunia / Terrain**: `assets/models/world/terrain/` (Tipe: Static Ground, Mesh + Static Box/Mesh Collider).
+- **Props & Lingkungan**: `assets/models/props/` (Tipe: Interaktif / Dekorasi).
+
+> **Tips Salin Path:** Di File Manager Vortex3D, pilih file `.glb` apa pun untuk melihat detail inspeksi (jumlah simpul, poligon, material, tekstur) lalu tekan tombol **"Salin Path"** untuk menyalin path folder rekomendasi ke clipboard.
+
+### 2. Langkah Setup Karakter & Kostum GLB
+1. Buka **File Manager** (atau tab **Assets** -> **Meshes**).
+2. Pilih file model karakter Anda (`hero.glb` atau `costume.glb`).
+3. Tekan **"Spawn ke Scene 3D"**.
+4. Di panel **Inspector**, pilih entitas karakter tersebut:
+   - Set **RigidBody**: Aktifkan fisika dinamis (`Mass = 1.0`, `IsKinematic = false`).
+   - Set **Collider**: Pilih bentuk `Capsule` atau `Box` penopang kaki karakter.
+   - Di bagian **Lua Script Runtime**, tekan **"+ Attach Script Lua ke Entitas"** lalu pilih template **"TPP Hero / Character Controller"** (`script_hero`).
+5. Karakter kini siap digerakkan menggunakan virtual joystick dan tombol lompat.
+
+### 3. Langkah Setup Permukaan Tanah / Terrain GLB
+1. Impor model permukaan tanah (`terrain.glb` atau `world.glb`) via File Manager.
+2. Tekan **"Spawn ke Scene 3D"**.
+3. Di panel **Inspector**, sesuaikan posisi (`Position Y = 0.0`) dan skala permukaan.
+4. Pasangkan **RigidBody**: Setel ke **Static** (`IsKinematic = true` atau `Mass = 0`) agar permukaan kokoh dan tidak jatuh akibat gravitasi.
+5. (Opsional) Pasang script `script_terrain` untuk memicu efek partikel langkah kaki atau deteksi permukaan tanah saat pemain melangkah.
+
+### 4. Setup Kamera Third-Person (TPP)
+- Kamera 3D di Vortex3D secara otomatis mendukung orbit multi-touch dan mengikuti target fokus entitas aktif.
+- Skrip Lua dapat mengarahkan fokus kamera dengan memanggil callback `camera:set_target(x, y, z)` secara langsung setiap frame.
+
+---
+
+## 📋 Fitur Terkini & Ergonomi Studio
+
+- **Salin Cepat Konsol Log & Aksi**:
+  - Tombol **"Salin Semua"** di bilah konsol untuk menyalin seluruh riwayat kejadian engine ke clipboard Android.
+  - Tombol **Salin Baris** (ikon clipboard di sisi kanan tiap baris log) untuk menyalin pesan spesifik.
+  - Filter tag terpadu: *Semua*, *Lua Script*, *Fisika*, *Aksi Engine*, dan *Error*.
+- **Attach Script Lua Dua Arah Langsung**:
+  - Di **Inspector**: Tombol **"+ Attach Script Lua ke Entitas"** dengan dropdown pemilih script, pembuatan script baru dari template, dan tombol *Lepas Script*.
+  - Di **Lua IDE**: Ribbon bar **"Target Entitas"** menampilkan entitas yang sedang aktif dipilih beserta tombol 1-ketukan untuk langsung memasang skrip yang sedang diedit.
+- **Toolbar Mode Landscape Scrollable & Safe-Area**:
+  - Bilah alat atas kini dapat digulir horizontal (`horizontalScroll`) secara fleksibel—tombol tidak akan pernah menciut atau terpotong pada layar HP sempit.
+  - Padding otomatis dari *safeDrawing insets* menghindari notch kamera dan bilah navigasi HP.
+  - Tombol **"Layar Penuh"** terdedikasi untuk menyembunyikan bilah navigasi HP secara instan.
+- **Perbaikan Immersive Mode saat Keyboard Muncul**:
+  - Deteksi penutupan keyboard virtual (IME) secara otomatis memulihkan mode immersive layar penuh tanpa meninggalkan tombol navigasi yang tersangkut.
+
+---
+
 ## 📄 Lisensi & Kontribusi
 
 Proyek ini dibangun untuk komunitas pengembang game seluler independen dan eksperimen AI kreatif. Bebas digunakan, dimodifikasi, dan dikembangkan lebih lanjut.
 
 Untuk berkontribusi, silakan buat *Pull Request* atau ajukan *Issue* di repositori resmi! 🚀
+

@@ -55,6 +55,19 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material3.Surface
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -95,178 +108,230 @@ fun LandscapeStudioScreen(
             .fillMaxSize()
             .background(Color(0xFF0D1117))
     ) {
-        // Godot 4 Mobile Compact Top Bar
-        TopAppBar(
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Lobby / Project Hub Button
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF478CBF))
-                            .clickable { viewModel.setInLobby(true) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                            .testTag("landscape_lobby_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Project Hub",
-                                tint = Color.White,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "Hub",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
+        val context = LocalContext.current
 
-                    Spacer(Modifier.width(8.dp))
+        // Godot 4 Mobile Scrollable Top Bar with Safe Navigation Insets
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)),
+            color = Color(0xFF0D1117)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Group 1: Hub & Scene Badge
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF478CBF))
+                        .clickable { viewModel.setInLobby(true) }
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                        .testTag("landscape_lobby_button"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = "Project Hub",
+                        tint = Color.White,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Hub",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
 
-                    // Active Scene Name Badge & Save
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF161B22))
-                            .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
-                            .clickable { viewModel.saveCurrentScene() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF161B22))
+                        .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
+                        .clickable { viewModel.saveCurrentScene() }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Layers,
+                        contentDescription = null,
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = sceneName,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFF0F6FC),
+                        maxLines = 1
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.Save,
+                        contentDescription = "Save Scene",
+                        tint = Color(0xFF8B949E),
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+
+                // Group 2: Dock Toggles
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF161B22))
+                        .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 2.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { viewModel.toggleLeftDock() },
+                        modifier = Modifier.size(32.dp).testTag("toggle_left_dock")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Layers,
-                            contentDescription = null,
+                            contentDescription = "Toggle Left Dock",
+                            tint = if (isLeftDockOpen) Color(0xFF00E5FF) else Color(0xFF6E7681),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.toggleBottomDock() },
+                        modifier = Modifier.size(32.dp).testTag("toggle_bottom_dock")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Terminal,
+                            contentDescription = "Toggle Console Dock",
+                            tint = if (isBottomDockOpen) Color(0xFF00E5FF) else Color(0xFF6E7681),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.toggleRightDock() },
+                        modifier = Modifier.size(32.dp).testTag("toggle_right_dock")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Toggle Inspector Dock",
+                            tint = if (isRightDockOpen) Color(0xFF00E5FF) else Color(0xFF6E7681),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                // Group 3: Simulation Controls
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF161B22))
+                        .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 2.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { viewModel.toggleSimulation() },
+                        modifier = Modifier.size(32.dp).testTag("landscape_sim_button")
+                    ) {
+                        Icon(
+                            imageVector = if (isSimulating) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = "Simulation",
+                            tint = if (isSimulating) Color(0xFFFFB300) else Color(0xFF00E676),
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.resetSimulation() },
+                        modifier = Modifier.size(32.dp).testTag("landscape_reset_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset",
+                            tint = Color.White,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                }
+
+                // Group 4: Render & View Modes
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF161B22))
+                        .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 2.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { viewModel.toggleWireframe() },
+                        modifier = Modifier.size(32.dp).testTag("landscape_wireframe_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.GridOn,
+                            contentDescription = "Wireframe",
+                            tint = if (isWireframe) Color(0xFF00E5FF) else Color(0xFF8B949E),
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { viewModel.setPlayMode(true) },
+                        modifier = Modifier.size(32.dp).testTag("landscape_play_mode_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Fullscreen,
+                            contentDescription = "Full Game",
                             tint = Color(0xFF00E5FF),
-                            modifier = Modifier.size(13.dp)
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                }
+
+                // Group 5: Re-hide System Navigation Bar / Immersion Button
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0xFF21262D))
+                        .clickable {
+                            (context as? android.app.Activity)?.window?.let { win ->
+                                val controller = WindowCompat.getInsetsController(win, win.decorView)
+                                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                                controller.hide(WindowInsetsCompat.Type.systemBars())
+                                viewModel.log("System", "Navigasi HP disembunyikan")
+                            }
+                        }
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                        .testTag("hide_system_bars_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.FitScreen,
+                            contentDescription = "Layar Penuh",
+                            tint = Color(0xFF8B949E),
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = sceneName,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFFF0F6FC),
+                            text = "Layar Penuh",
+                            fontSize = 10.sp,
+                            color = Color(0xFF8B949E),
                             maxLines = 1
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.Save,
-                            contentDescription = "Save Scene",
-                            tint = Color(0xFF8B949E),
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.width(10.dp))
-
-                    // Dock Toggles Toolbar
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0xFF161B22))
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Left Dock Toggle
-                        IconButton(
-                            onClick = { viewModel.toggleLeftDock() },
-                            modifier = Modifier.size(28.dp).testTag("toggle_left_dock")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Layers,
-                                contentDescription = "Toggle Left Dock",
-                                tint = if (isLeftDockOpen) Color(0xFF00E5FF) else Color(0xFF6E7681),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        // Bottom Dock Toggle
-                        IconButton(
-                            onClick = { viewModel.toggleBottomDock() },
-                            modifier = Modifier.size(28.dp).testTag("toggle_bottom_dock")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Terminal,
-                                contentDescription = "Toggle Console Dock",
-                                tint = if (isBottomDockOpen) Color(0xFF00E5FF) else Color(0xFF6E7681),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-
-                        // Right Dock Toggle
-                        IconButton(
-                            onClick = { viewModel.toggleRightDock() },
-                            modifier = Modifier.size(28.dp).testTag("toggle_right_dock")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Tune,
-                                contentDescription = "Toggle Inspector Dock",
-                                tint = if (isRightDockOpen) Color(0xFF00E5FF) else Color(0xFF6E7681),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
                     }
                 }
-            },
-            actions = {
-                // Simulation Run/Pause
-                IconButton(
-                    onClick = { viewModel.toggleSimulation() },
-                    modifier = Modifier.size(32.dp).testTag("landscape_sim_button")
-                ) {
-                    Icon(
-                        imageVector = if (isSimulating) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = "Simulation",
-                        tint = if (isSimulating) Color(0xFFFFB300) else Color(0xFF00E676),
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                // Reset Simulation
-                IconButton(
-                    onClick = { viewModel.resetSimulation() },
-                    modifier = Modifier.size(32.dp).testTag("landscape_reset_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Reset",
-                        tint = Color.White,
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
-
-                // Wireframe Toggle
-                IconButton(
-                    onClick = { viewModel.toggleWireframe() },
-                    modifier = Modifier.size(32.dp).testTag("landscape_wireframe_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.GridOn,
-                        contentDescription = "Wireframe",
-                        tint = if (isWireframe) Color(0xFF00E5FF) else Color(0xFF8B949E),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                // Fullscreen Play Game Mode
-                IconButton(
-                    onClick = { viewModel.setPlayMode(true) },
-                    modifier = Modifier.size(32.dp).testTag("landscape_play_mode_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Fullscreen,
-                        contentDescription = "Full Game",
-                        tint = Color(0xFF00E5FF),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0D1117))
-        )
+            }
+        }
 
         // Main Studio Workspace Row (Left Collapsible Dock + Center 3D Viewport + Right Collapsible Dock)
         Row(

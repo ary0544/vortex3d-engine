@@ -14,10 +14,182 @@ data class GlbParseResult(
     val triangleCount: Int
 )
 
+data class GlbMetadata(
+    val fileName: String,
+    val fileSizeFormatted: String,
+    val modelName: String,
+    val meshCount: Int,
+    val vertexCount: Int,
+    val triangleCount: Int,
+    val materialCount: Int,
+    val textureCount: Int,
+    val animationCount: Int,
+    val roughness: Float,
+    val metallic: Float,
+    val baseColorHex: String,
+    val recommendedRole: String,
+    val recommendedFolder: String,
+    val recommendationTip: String
+)
+
 object GlbParser {
     private const val GLB_MAGIC = 0x46546C67 // "glTF"
     private const val CHUNK_TYPE_JSON = 0x4E4F534A // "JSON"
     private const val CHUNK_TYPE_BIN = 0x004E4942 // "BIN\0"
+
+    fun inspectFile(file: java.io.File): GlbMetadata {
+        return try {
+            val bytes = file.readBytes()
+            inspectBytes(bytes, file.name, file.length())
+        } catch (e: Exception) {
+            fallbackMetadata(file.name, file.length())
+        }
+    }
+
+    fun inspectBytes(bytes: ByteArray, fileName: String, fileSize: Long = bytes.size.toLong()): GlbMetadata {
+        return try {
+            if (bytes.size < 12) return fallbackMetadata(fileName, fileSize)
+            val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            val magic = buffer.int
+            if (magic != GLB_MAGIC) return fallbackMetadata(fileName, fileSize)
+            val version = buffer.int
+            val totalLength = buffer.int
+
+            var jsonString: String? = null
+            while (buffer.remaining() >= 8) {
+                val chunkLength = buffer.int
+                val chunkType = buffer.int
+                if (chunkLength < 0 || buffer.remaining() < chunkLength) break
+                if (chunkType == CHUNK_TYPE_JSON) {
+                    val jsonBytes = ByteArray(chunkLength)
+                    buffer.get(jsonBytes)
+                    jsonString = String(jsonBytes, Charsets.UTF_8).trim()
+                    break
+                } else {
+                    buffer.position(buffer.position() + chunkLength)
+                }
+            }
+
+            val parseResult = try {
+                parseBytes(bytes, fileName.substringBeforeLast("."))
+            } catch (e: Exception) {
+                null
+            }
+
+            var modelName = parseResult?.name ?: fileName.substringBeforeLast(".")
+            var meshCount = 1
+            var materialCount = 1
+            var textureCount = 0
+            var animationCount = 0
+            var roughness = parseResult?.material?.roughness ?: 0.5f
+            var metallic = parseResult?.material?.metallic ?: 0.2f
+            var baseColorHex = "#42A5F5"
+
+            if (jsonString != null) {
+                val root = JSONObject(jsonString)
+                meshCount = root.optJSONArray("meshes")?.length() ?: 1
+                materialCount = root.optJSONArray("materials")?.length() ?: 1
+                textureCount = root.optJSONArray("textures")?.length() ?: 0
+                animationCount = root.optJSONArray("animations")?.length() ?: 0
+
+                val materials = root.optJSONArray("materials")
+                if (materials != null && materials.length() > 0) {
+                    val m0 = materials.optJSONObject(0)
+                    val pbr = m0?.optJSONObject("pbrMetallicRoughness")
+                    if (pbr != null) {
+                        roughness = pbr.optDouble("roughnessFactor", 0.5).toFloat()
+                        metallic = pbr.optDouble("metallicFactor", 0.2).toFloat()
+                        val colorArr = pbr.optJSONArray("baseColorFactor")
+                        if (colorArr != null && colorArr.length() >= 3) {
+                            val r = (colorArr.getDouble(0) * 255).toInt().coerceIn(0, 255)
+                            val g = (colorArr.getDouble(1) * 255).toInt().coerceIn(0, 255)
+                            val b = (colorArr.getDouble(2) * 255).toInt().coerceIn(0, 255)
+                            baseColorHex = String.format("#%02X%02X%02X", r, g, b)
+                        }
+                    }
+                }
+            }
+
+            val lower = (fileName + " " + modelName).lowercase()
+            val (role, folder, tip) = when {
+                lower.contains("char") || lower.contains("hero") || lower.contains("player") ||
+                lower.contains("kostum") || lower.contains("costume") || lower.contains("avatar") ||
+                lower.contains("skin") || lower.contains("body") || lower.contains("tpp") -> {
+                    Triple(
+                        "Kostum Karakter TPP (Dynamic Actor)",
+                        "assets/models/characters/",
+                        "Direkomendasikan ditempatkan di folder 'assets/models/characters/'. Pasang script player_controller.lua dan kamera TPP untuk menggerakkan kostum ini."
+                    )
+                }
+                lower.contains("terrain") || lower.contains("ground") || lower.contains("map") ||
+                lower.contains("surface") || lower.contains("permukaan") || lower.contains("world") ||
+                lower.contains("land") || lower.contains("floor") || lower.contains("level") -> {
+                    Triple(
+                        "Permukaan Kostum GLB / Terrain (Static Ground)",
+                        "assets/models/world/terrain/",
+                        "Direkomendasikan ditempatkan di folder 'assets/models/world/terrain/'. Beri MeshCollider statis agar karakter open-world tidak tembus lantai."
+                    )
+                }
+                else -> {
+                    Triple(
+                        "3D Asset / Prop Lingkungan",
+                        "assets/models/props/",
+                        "Dapat ditempatkan di folder 'assets/models/props/'. Cocok untuk item, senjata, bangunan, atau dekorasi open-world."
+                    )
+                }
+            }
+
+            GlbMetadata(
+                fileName = fileName,
+                fileSizeFormatted = formatFileSize(fileSize),
+                modelName = modelName,
+                meshCount = meshCount,
+                vertexCount = parseResult?.vertexCount ?: 0,
+                triangleCount = parseResult?.triangleCount ?: 0,
+                materialCount = materialCount,
+                textureCount = textureCount,
+                animationCount = animationCount,
+                roughness = roughness,
+                metallic = metallic,
+                baseColorHex = baseColorHex,
+                recommendedRole = role,
+                recommendedFolder = folder,
+                recommendationTip = tip
+            )
+        } catch (e: Exception) {
+            fallbackMetadata(fileName, fileSize)
+        }
+    }
+
+    private fun fallbackMetadata(fileName: String, fileSize: Long): GlbMetadata {
+        val lower = fileName.lowercase()
+        val isCharacter = lower.contains("char") || lower.contains("kostum") || lower.contains("player")
+        return GlbMetadata(
+            fileName = fileName,
+            fileSizeFormatted = formatFileSize(fileSize),
+            modelName = fileName.substringBeforeLast("."),
+            meshCount = 1,
+            vertexCount = 0,
+            triangleCount = 0,
+            materialCount = 1,
+            textureCount = 0,
+            animationCount = 0,
+            roughness = 0.5f,
+            metallic = 0.2f,
+            baseColorHex = "#42A5F5",
+            recommendedRole = if (isCharacter) "Kostum Karakter TPP" else "Permukaan / Prop 3D",
+            recommendedFolder = if (isCharacter) "assets/models/characters/" else "assets/models/world/",
+            recommendationTip = "File model 3D glTF binary. Tempatkan pada struktur folder proyek untuk modularitas aset."
+        )
+    }
+
+    private fun formatFileSize(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val kb = bytes / 1024.0
+        if (kb < 1024) return String.format(java.util.Locale.US, "%.1f KB", kb)
+        val mb = kb / 1024.0
+        return String.format(java.util.Locale.US, "%.2f MB", mb)
+    }
 
     fun parse(inputStream: InputStream, defaultName: String = "ImportedModel"): GlbParseResult {
         val bytes = inputStream.readBytes()

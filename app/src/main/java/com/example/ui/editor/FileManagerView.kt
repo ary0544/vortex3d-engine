@@ -40,8 +40,11 @@ import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.AlertDialog
+import com.example.engine.model.GlbParser
+import com.example.engine.model.GlbMetadata
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -412,7 +415,13 @@ fun FileManagerView(
     }
 
     // File Action Sheet Dialog
+    // File Action Sheet Dialog with GLB Inspection & Placement Recommendation
     selectedFileForAction?.let { fileItem ->
+        val isGlb = fileItem.extension == "glb"
+        val glbMeta = remember(fileItem) {
+            if (isGlb) GlbParser.inspectFile(fileItem.file) else null
+        }
+
         AlertDialog(
             onDismissRequest = { selectedFileForAction = null },
             title = {
@@ -438,20 +447,114 @@ fun FileManagerView(
             },
             text = {
                 Column {
-                    Text("Ukuran: ${fileItem.sizeString}", fontSize = 11.sp, color = Color(0xFF8B949E))
-                    Text("Dimodifikasi: ${fileItem.dateString}", fontSize = 11.sp, color = Color(0xFF8B949E))
+                    Text("Ukuran: ${fileItem.sizeString} • Dimodifikasi: ${fileItem.dateString}", fontSize = 10.5.sp, color = Color(0xFF8B949E))
                     Spacer(Modifier.height(8.dp))
 
-                    when (fileItem.extension) {
-                        "glb" -> {
-                            Text("Model 3D glTF Binary (.glb). Mau di apakan file GLB ini?", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    if (isGlb && glbMeta != null) {
+                        // 1. Spesifikasi Geometri GLB
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text("Spesifikasi Model GLB:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF00E5FF))
+                                Spacer(Modifier.height(3.dp))
+                                Text("• Model: ${glbMeta.modelName}", fontSize = 10.5.sp, color = Color.White)
+                                Text("• Geometri: ${glbMeta.meshCount} Mesh | ${glbMeta.vertexCount} Verts | ${glbMeta.triangleCount} Tris", fontSize = 10.5.sp, color = Color.White)
+                                Text("• Shading PBR: Roughness ${String.format(java.util.Locale.US, "%.2f", glbMeta.roughness)} | Metallic ${String.format(java.util.Locale.US, "%.2f", glbMeta.metallic)}", fontSize = 10.5.sp, color = Color(0xFFC9D1D9))
+                                Text("• Aset: ${glbMeta.textureCount} Tekstur, ${glbMeta.animationCount} Animasi", fontSize = 10.5.sp, color = Color(0xFF8B949E))
+                            }
                         }
-                        "lua" -> {
-                            Text("Script Game Lua. Buka di editor kode IDE Vortex3D?", fontSize = 12.sp)
+
+                        // 2. Rekomendasi Penempatan Folder
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D2538)),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text("📌 Rekomendasi Penempatan:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF00E676))
+                                Spacer(Modifier.height(3.dp))
+                                Text("Peran: ${glbMeta.recommendedRole}", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = Color.White)
+                                Spacer(Modifier.height(4.dp))
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF161B22))
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = glbMeta.recommendedFolder,
+                                        fontSize = 10.5.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = Color(0xFF58A6FF),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(Color(0xFF238636))
+                                            .clickable {
+                                                viewModel.copyToClipboard(
+                                                    context = context,
+                                                    text = glbMeta.recommendedFolder,
+                                                    label = "Path Folder Rekomendasi"
+                                                )
+                                            }
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
+                                            Spacer(Modifier.width(2.dp))
+                                            Text("Salin Path", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                    }
+                                }
+
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = glbMeta.recommendationTip,
+                                    fontSize = 10.sp,
+                                    color = Color(0xFFC9D1D9),
+                                    lineHeight = 14.sp
+                                )
+                            }
                         }
-                        else -> {
-                            Text("Format file: ${fileItem.extension}", fontSize = 12.sp)
+
+                        Spacer(Modifier.height(6.dp))
+
+                        // Tombol Salin Info Lengkap untuk AI
+                        OutlinedButton(
+                            onClick = {
+                                val fullInfo = buildString {
+                                    appendLine("=== INFORMASI MODEL 3D GLB ===")
+                                    appendLine("File: ${glbMeta.fileName} (${glbMeta.fileSizeFormatted})")
+                                    appendLine("Model: ${glbMeta.modelName}")
+                                    appendLine("Meshes: ${glbMeta.meshCount}, Vertices: ${glbMeta.vertexCount}, Triangles: ${glbMeta.triangleCount}")
+                                    appendLine("PBR: Roughness ${glbMeta.roughness}, Metallic ${glbMeta.metallic}, BaseColor ${glbMeta.baseColorHex}")
+                                    appendLine("Tekstur: ${glbMeta.textureCount}, Animasi: ${glbMeta.animationCount}")
+                                    appendLine("Rekomendasi Peran: ${glbMeta.recommendedRole}")
+                                    appendLine("Folder Penempatan: ${glbMeta.recommendedFolder}")
+                                    appendLine("Petunjuk: ${glbMeta.recommendationTip}")
+                                }
+                                viewModel.copyToClipboard(context, fullInfo, "Spesifikasi Lengkap GLB")
+                            },
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.fillMaxWidth().height(28.dp)
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color(0xFF00E5FF))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Salin Info Lengkap (untuk AI)", fontSize = 10.sp, color = Color(0xFF00E5FF))
                         }
+                    } else if (fileItem.extension == "lua") {
+                        Text("Script Game Lua. Buka di editor kode IDE Vortex3D?", fontSize = 12.sp)
+                    } else {
+                        Text("Format file: ${fileItem.extension}", fontSize = 12.sp)
                     }
                 }
             },
