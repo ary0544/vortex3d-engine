@@ -368,6 +368,8 @@ fun FileManagerView(
                     onClick = {
                         if (item.isDirectory) {
                             currentDir = item.file
+                        } else if (item.extension.lowercase() == "glb") {
+                            viewModel.openGlbInspection(item.file)
                         } else {
                             selectedFileForAction = item
                         }
@@ -563,13 +565,12 @@ fun FileManagerView(
                     "glb" -> {
                         Button(
                             onClick = {
-                                viewModel.importAndSpawnGlbFile(fileItem.file)
+                                viewModel.openGlbInspection(fileItem.file)
                                 selectedFileForAction = null
-                                viewModel.setWorkspaceTab(WorkspaceTab.SCENE_VIEW)
                             },
                             modifier = Modifier.testTag("spawn_glb_dialog_button")
                         ) {
-                            Text("Spawn ke Scene 3D", fontSize = 11.sp)
+                            Text("Buka 3D Preview & Impor", fontSize = 11.sp)
                         }
                     }
                     "lua" -> {

@@ -65,6 +65,7 @@ fun InspectorView(
 ) {
     val scene by viewModel.scene.collectAsState()
     val selectedId by viewModel.selectedEntityId.collectAsState()
+    val allScripts by viewModel.scriptsState.collectAsState()
     val selectedEntity = scene.findEntity(selectedId ?: "")
 
     Column(
@@ -342,7 +343,7 @@ fun InspectorView(
                                 color = Color(0xFF00E5FF)
                             )
 
-                            viewModel.assetManager.scripts.values.forEach { scriptAsset ->
+                            allScripts.forEach { scriptAsset ->
                                 DropdownMenuItem(
                                     text = {
                                         Column {
@@ -382,7 +383,11 @@ fun InspectorView(
                 onDismissRequest = { showNewScriptDialog = false },
                 title = { Text("Buat & Pasang Script Lua", fontSize = 14.sp, fontWeight = FontWeight.Bold) },
                 text = {
-                    Column {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                    ) {
                         OutlinedTextField(
                             value = newScriptName,
                             onValueChange = { newScriptName = it },
@@ -394,6 +399,7 @@ fun InspectorView(
                         Text("Pilih Template Dasar:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))
                         listOf(
+                            "odyssey" to "⚔️ Assassin Odyssey (Analog & Camera Follow)",
                             "hero" to "🎮 TPP Hero / Character Controller",
                             "orbit" to "🔄 Orbit / Rotasi Objek 3D",
                             "terrain" to "⛰️ Permukaan Tanah GLB / Collider",

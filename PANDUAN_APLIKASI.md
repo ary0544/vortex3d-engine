@@ -327,40 +327,52 @@ Sistem manajemen aset memungkinkan pengelolaan file proyek internal serta inspek
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ INSPEKSI MODEL 3D GLB: hero_costume.glb                 │
-├─────────────────────────────────────────────────────────┤
-│ Ukuran File: 1.45 MB       Nama Model: HeroActor        │
-│ Total Simpul: 3,420 Verts  Total Segitiga: 6,840 Tris   │
-│ Jumlah Material: 2 PBR     Kekasaran: 0.35 | Logam: 0.8 │
-├─────────────────────────────────────────────────────────┤
-│ REKOMENDASI PERAN ASSET:                                │
-│ ➤ Kostum Karakter TPP (Dynamic Actor)                   │
-│ Folder Tujuan: assets/models/characters/                │
-│                                                         │
-│ [📋 Salin Path Folder]     [🚀 Spawn ke Scene 3D]       │
+│ GODOT-STYLE 3D MODEL IMPORTER & PREVIEW: hero.glb      │
+├──────────────────────────────┬──────────────────────────┤
+│ [MINI 3D ORBIT VIEWPORT]     │ [INSPEKTOR HIERARKI & PBR]│
+│ • Orbit Turntable (1-Jari)   │ • Pohon Node & Skeleton  │
+│ • Zoom Pinch (2-Jari)        │   ├─ RootNode            │
+│ • Shaded / Wireframe / Grid  │   │   └─ Hips (BONE)     │
+│ • Indikator Sendi Tulang     │ • Track Animasi: Walk/Run│
+├──────────────────────────────┼──────────────────────────┤
+│ [PEMUTAR ANIMASI REAL-TIME]  │ [PENGATURAN IMPOR]       │
+│ [▶ Play] [Scrubber Slider]   │ • Skala Normalisasi Otom.│
+│ Durasi: 0.00s / 1.45s        │ • Collider: Box / Sphere │
+├──────────────────────────────┴──────────────────────────┤
+│ [Batal]         [Simpan ke Assets]       [Spawn ke 3D ★]│
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Alur Inspeksi & Impor File GLB:
-1. **Buka File Manager:** Pilih file biner `.glb` apa pun di penyimpanan proyek.
-2. **Inspeksi Otomatis:**
-   - Parser membaca header magic `0x46546C67` ("glTF"), mengekstrak chunk JSON glTF 2.0 dan buffer biner BIN.
-   - Menghitung simpul (*vertices*), segitiga poligon (*triangles*), jumlah tekstur, animasi, dan material PBR.
-3. **Rekomendasi Penempatan Folder:**
-   - **Karakter / Kostum Hero:** Direkomendasikan ke `assets/models/characters/` (sebagai Dynamic Actor).
-   - **Terrain / Permukaan Tanah:** Direkomendasikan ke `assets/models/world/terrain/` (sebagai Static Ground dengan collider kokoh).
-   - **Props / Lingkungan:** Direkomendasikan ke `assets/models/props/`.
-4. **Salin Path:** Ketuk **"Salin Path"** untuk menyalin path direktori yang direkomendasikan langsung ke clipboard Android.
-5. **Spawn ke Scene 3D:** Ketuk tombol spawn untuk langsung menginstansiasi model 3D ke Viewport dengan transform dan material PBR aslinya.
+### Alur Inspeksi & Impor Model GLB Ala Godot Engine:
+1. **Pilih File GLB:** Ketuk file `.glb` apa pun di *File Manager*, *Asset Browser*, atau *Full Screen File Picker*.
+2. **Dialog Preview Otomatis Terbuka:**
+   - Aplikasi otomatis menampilkan modal dialog inspeksi layar penuh ala *Advanced Import Settings* Godot 4.
+3. **Viewport Preview 3D Interaktif:**
+   - **Orbit Kamera Turntable:** Geser 1 jari di viewport mini untuk memutar sudut pandang model secara 360 derajat.
+   - **Zoom Pinch:** Cubit atau renggangkan 2 jari untuk memperbesar / memperkecil objek.
+   - **Toggle Tampilan:** Tombol cepat untuk beralih antara *Shaded PBR*, *Wireframe*, *Grid Lantai*, dan *Indikator Tulang Skeleton*.
+4. **Pemutar Animasi Terpadu:**
+   - Jika model memuat animasi glTF, dropdown klip menampilkan seluruh daftar track (seperti *Idle*, *Walk*, *Run*).
+   - Tombol Play/Pause dan slider scrubber waktu untuk mempratinjau jalannya animasi secara real-time.
+   - Pilihan kecepatan putar: `0.5x`, `1.0x`, dan `2.0x`.
+5. **Pemeriksaan Hierarki Node & Tulang (Skeleton Tree):**
+   - Menelusuri pohon node glTF secara bertingkat dengan label badge khusus untuk `BONE` (kuning emas), `MESH` (cyan), dan `NODE` (abu-abu).
+   - Menghitung total sendi tulang rigging karakter secara otomatis.
+6. **Normalisasi Skala & Auto-Focus Kamera Saat Spawn:**
+   - Bounding Box model dihitung otomatis saat parsing. Jika model terlalu raksasa atau terlalu kecil, engine otomatis menyarankan faktor skala normalisasi proporsional.
+   - Saat tombol **"Spawn ke Scene 3D ★"** ditekan, model ditempatkan tepat di atas permukaan tanah ($y = 0$), collider fisika langsung diterapkan, dan kamera utama editor 3D otomatis membidik pusat objek baru sehingga model tidak pernah hilang atau luput dari pandangan.
 
 ### Implementasi Source Code:
-* **UI File:** `app/src/main/java/com/example/ui/editor/FileManagerView.kt` & `app/src/main/java/com/example/ui/editor/AssetBrowserView.kt`
-* **Dialog File:** `app/src/main/java/com/example/ui/editor/FullScreenFilePickerDialog.kt`
-* **Parser GLB Biner:** `app/src/main/java/com/example/engine/model/GlbParser.kt`
-  * `GlbParser.inspectFile(file)`: Membaca file dan menghasilkan objek `GlbMetadata`.
-  * `GlbParser.parseBytes(bytes, name)`: Mendekode struktur biner glTF 2.0 menjadi `Mesh` dan `Material` native engine.
-  * `GlbParser.readVec3List()`: Membaca koordinat posisi $X,Y,Z$ dan normal dari `bufferViews`.
-  * `GlbParser.readIndicesList()`: Mengurai indeks segitiga dengan dukungan `UNSIGNED_BYTE`, `UNSIGNED_SHORT`, dan `UNSIGNED_INT`.
+* **Dialog Importer Godot UI:** `app/src/main/java/com/example/ui/editor/GlbImportPreviewDialog.kt`
+* **File Manager & Picker Integration:** `app/src/main/java/com/example/ui/editor/FileManagerView.kt` & `app/src/main/java/com/example/ui/editor/FullScreenFilePickerDialog.kt`
+* **Manajer & Integrasi ViewModel:** `app/src/main/java/com/example/viewmodel/EngineViewModel.kt`
+  * `viewModel.openGlbInspection(file)`: Membaca file GLB dan memicu pembukaan dialog preview.
+  * `viewModel.spawnGlbFromInspection(inspection, colliderShape, customScale, role)`: Men-spawn model ke scene, mengonfigurasi komponen fisika, dan mengunci kamera target ke model baru.
+  * `viewModel.spawnMeshAsset(mesh)`: Men-spawn aset mesh terdaftar dari Asset Browser.
+* **Parser GLB & Ekstraktor Struktur:** `app/src/main/java/com/example/engine/model/GlbParser.kt`
+  * `GlbParser.inspectAndParseGlbFile(file)`: Menghasilkan objek `GlbInspectionResult` lengkap.
+  * `GlbParser.decodeGltfInspection()`: Mengekstrak seluruh primitives pada semua sub-mesh, pohon node, array joints/tulang (`skins`), serta samplers/channels animasi glTF 2.0.
+  * Penghitungan BoundingBox3D ($min, max, center, size$) dan rasio skala proporsional.
 
 ---
 

@@ -61,6 +61,7 @@ enum class RightDockTab {
     INSPECTOR,
     LUA_SCRIPT,
     SHADERS,
+    AI_COPILOT,
     DOCS
 }
 
@@ -209,6 +210,55 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
     private val _editingScript = MutableStateFlow<LuaScriptAsset?>(null)
     val editingScript: StateFlow<LuaScriptAsset?> = _editingScript.asStateFlow()
 
+    private val _scriptsState = MutableStateFlow<List<LuaScriptAsset>>(emptyList())
+    val scriptsState: StateFlow<List<LuaScriptAsset>> = _scriptsState.asStateFlow()
+
+    fun refreshScriptsState() {
+        _scriptsState.value = assetManager.scripts.values.toList()
+    }
+
+    fun syncSceneScriptsToAssetManager(sceneObj: Scene) {
+        var changed = false
+        for (entity in sceneObj.entities) {
+            val comp = entity.luaScript ?: continue
+            if (comp.scriptId.isNotBlank() && !assetManager.scripts.containsKey(comp.scriptId)) {
+                assetManager.scripts[comp.scriptId] = LuaScriptAsset(
+                    id = comp.scriptId,
+                    name = comp.scriptName,
+                    description = "Skrip untuk ${entity.name}",
+                    content = comp.scriptContent
+                )
+                changed = true
+            }
+        }
+        if (changed || _scriptsState.value.isEmpty()) {
+            refreshScriptsState()
+        }
+    }
+
+    fun syncEditingScriptForSelectedEntity(entityId: String?) {
+        if (entityId == null) {
+            _editingScript.value = null
+            return
+        }
+        val entity = _scene.value.findEntity(entityId)
+        val comp = entity?.luaScript
+        if (comp != null && comp.scriptId.isNotBlank()) {
+            val asset = assetManager.scripts[comp.scriptId] ?: LuaScriptAsset(
+                id = comp.scriptId,
+                name = comp.scriptName,
+                description = "Skrip untuk ${entity.name}",
+                content = comp.scriptContent
+            ).also {
+                assetManager.scripts[comp.scriptId] = it
+                refreshScriptsState()
+            }
+            _editingScript.value = asset
+        } else {
+            _editingScript.value = null
+        }
+    }
+
     private val _editingShader = MutableStateFlow<ShaderProgram?>(null)
     val editingShader: StateFlow<ShaderProgram?> = _editingShader.asStateFlow()
 
@@ -240,6 +290,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
     var elapsedTimeSeconds = 0f
 
     init {
+        syncSceneScriptsToAssetManager(_scene.value)
+        syncEditingScriptForSelectedEntity(_selectedEntityId.value)
         startSimulationLoop()
     }
 
@@ -328,6 +380,7 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     fun selectEntity(id: String?) {
         _selectedEntityId.value = id
+        syncEditingScriptForSelectedEntity(id)
     }
 
     fun setWorkspaceTab(tab: WorkspaceTab) {
@@ -484,25 +537,31 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
     fun editScript(script: LuaScriptAsset) {
         _editingScript.value = script
         _workspaceTab.value = WorkspaceTab.LUA_EDITOR
+        _rightDockTab.value = RightDockTab.LUA_SCRIPT
+        _isRightDockOpen.value = true
     }
 
     fun saveScript(id: String, content: String) {
-        val existing = assetManager.scripts[id]
-        if (existing != null) {
-            val updated = existing.copy(content = content)
-            assetManager.scripts[id] = updated
-            _editingScript.value = updated
-            // Update entity script if active
-            val sel = _selectedEntityId.value
-            if (sel != null) {
-                updateSelectedEntity {
-                    if (it.luaScript?.scriptId == id) {
-                        it.copy(luaScript = it.luaScript.copy(scriptContent = content))
-                    } else it
-                }
+        val existing = assetManager.scripts[id] ?: LuaScriptAsset(
+            id = id,
+            name = _editingScript.value?.name ?: "script",
+            description = "Custom script",
+            content = content
+        )
+        val updated = existing.copy(content = content)
+        assetManager.scripts[id] = updated
+        _editingScript.value = updated
+        refreshScriptsState()
+
+        // Update all entities in scene using this script
+        _scene.value = _scene.value.copy(
+            entities = _scene.value.entities.map { entity ->
+                if (entity.luaScript?.scriptId == id) {
+                    entity.copy(luaScript = entity.luaScript.copy(scriptContent = content))
+                } else entity
             }
-            log("Lua", "Saved script: ${updated.name}")
-        }
+        )
+        log("Lua", "Saved script: ${updated.name}")
     }
 
     fun attachScriptToEntity(entityId: String, scriptId: String) {
@@ -519,6 +578,9 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
                 if (it.id == entityId) it.copy(luaScript = updatedComp) else it
             }
         )
+        if (_selectedEntityId.value == entityId) {
+            _editingScript.value = script
+        }
         log("Lua", "✓ Script '${script.name}' terpasang ke '${entity.name}'")
     }
 
@@ -539,6 +601,7 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
                 if (it.id == sel) it.copy(luaScript = null) else it
             }
         )
+        _editingScript.value = null
         log("Lua", "Script dilepas dari entitas '${entity.name}'")
     }
 
@@ -546,6 +609,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
         val sel = _selectedEntityId.value ?: return
         val scriptId = "script_${LogIdCounter.nextId()}"
         val content = when (templateType) {
+            "odyssey" -> com.example.engine.lua.LuaScriptLibrary.defaultScripts.find { it.id == "script_odyssey" }?.content
+                ?: "-- Controller\nfunction update(dt)\nend\n"
             "hero" -> com.example.engine.lua.LuaScriptLibrary.defaultScripts.find { it.id == "script_hero" }?.content
                 ?: "-- Controller\nfunction update(dt)\nend\n"
             "orbit" -> com.example.engine.lua.LuaScriptLibrary.defaultScripts.find { it.id == "script_orbit" }?.content
@@ -556,6 +621,7 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
         }
         val asset = LuaScriptAsset(id = scriptId, name = name, description = "Dibuat untuk entitas", content = content)
         assetManager.scripts[scriptId] = asset
+        refreshScriptsState()
         attachScriptToSelectedEntity(scriptId)
         editScript(asset)
     }
@@ -584,6 +650,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
     fun editShader(shader: ShaderProgram) {
         _editingShader.value = shader
         _workspaceTab.value = WorkspaceTab.SHADER_EDITOR
+        _rightDockTab.value = RightDockTab.SHADERS
+        _isRightDockOpen.value = true
     }
 
     fun saveShader(shader: ShaderProgram) {
@@ -645,22 +713,95 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
         _latestScriptError.value = null
     }
 
-    fun importAndSpawnGlbFile(file: File) {
-        try {
-            val result = GlbParser.parse(file.inputStream(), file.nameWithoutExtension)
-            assetManager.meshes[result.mesh.id] = result.mesh
-            assetManager.materials[result.material.id] = result.material
+    private val _inspectingGlbResult = MutableStateFlow<com.example.engine.model.GlbInspectionResult?>(null)
+    val inspectingGlbResult: StateFlow<com.example.engine.model.GlbInspectionResult?> = _inspectingGlbResult.asStateFlow()
 
+    fun openGlbInspection(file: File) {
+        try {
+            val inspection = GlbParser.inspectAndParseGlbFile(file)
+            _inspectingGlbResult.value = inspection
+            log("Asset", "Membuka dialog inspeksi 3D GLB: ${file.name} (${inspection.mesh.vertexCount} verts, ${inspection.boneCount} tulang, ${inspection.animations.size} animasi)")
+        } catch (e: Exception) {
+            log("AssetError", "Gagal membaca file GLB: ${e.message}")
+        }
+    }
+
+    fun closeGlbInspection() {
+        _inspectingGlbResult.value = null
+    }
+
+    fun spawnGlbFromInspection(
+        inspection: com.example.engine.model.GlbInspectionResult,
+        colliderShape: ColliderShape = ColliderShape.BOX,
+        customScale: Float = inspection.suggestedScale,
+        role: String = "Dynamic Actor"
+    ) {
+        try {
+            assetManager.meshes[inspection.mesh.id] = inspection.mesh
+            assetManager.materials[inspection.material.id] = inspection.material
+
+            val effectiveScale = if (customScale > 0.0001f) customScale else 1.0f
+            val halfHeight = (inspection.boundingBox.size.y * effectiveScale) * 0.5f
+            val spawnPos = Vec3(0f, maxOf(halfHeight, 0.05f), 0f)
+
+            val isStatic = role.contains("Static") || role.contains("Terrain") || role.contains("Ground")
             val entity = Entity(
                 id = "ent_glb_${LogIdCounter.nextId()}",
-                name = result.name,
-                transform = TransformComponent(position = Vec3(0f, 3.5f, 0f)),
-                meshRenderer = MeshRendererComponent(meshId = result.mesh.id, materialId = result.material.id),
-                rigidBody = RigidBodyComponent(mass = 1.0f, colliderShape = ColliderShape.BOX)
+                name = inspection.modelName,
+                transform = TransformComponent(
+                    position = spawnPos,
+                    rotation = Vec3.ZERO,
+                    scale = Vec3(effectiveScale, effectiveScale, effectiveScale)
+                ),
+                meshRenderer = MeshRendererComponent(
+                    meshId = inspection.mesh.id,
+                    materialId = inspection.material.id
+                ),
+                rigidBody = RigidBodyComponent(
+                    mass = if (isStatic) 0f else 1.0f,
+                    isStatic = isStatic,
+                    colliderShape = colliderShape
+                )
             )
+
             _scene.value = _scene.value.copy(entities = _scene.value.entities + entity)
             _selectedEntityId.value = entity.id
-            log("Asset", "Berhasil mengimpor & spawn model GLB: ${result.name} (${result.vertexCount} verts, ${result.triangleCount} tris)")
+
+            // Otomatis fokuskan dan sesuaikan jarak kamera ke model baru
+            camera.target = spawnPos
+            val modelRadius = (inspection.boundingBox.size.length() * effectiveScale * 0.5f).coerceAtLeast(1.2f)
+            camera.distance = (modelRadius * 2.4f).coerceIn(2.5f, 50.0f)
+            camera.pitchDegrees = 20.0f
+            camera.yawDegrees = 35.0f
+
+            setWorkspaceTab(WorkspaceTab.SCENE_VIEW)
+            _inspectingGlbResult.value = null
+            log("Asset", "Berhasil spawn model GLB '${inspection.modelName}'! Kamera langsung difokuskan ke model.")
+        } catch (e: Exception) {
+            log("AssetError", "Gagal men-spawn GLB: ${e.message}")
+        }
+    }
+
+    fun spawnMeshAsset(mesh: com.example.engine.model.Mesh) {
+        assetManager.meshes[mesh.id] = mesh
+        val entity = Entity(
+            id = "ent_mesh_${LogIdCounter.nextId()}",
+            name = mesh.name,
+            transform = TransformComponent(position = Vec3(0f, 1.5f, 0f)),
+            meshRenderer = MeshRendererComponent(meshId = mesh.id, materialId = "mat_default"),
+            rigidBody = RigidBodyComponent(mass = 1.0f, colliderShape = ColliderShape.BOX)
+        )
+        _scene.value = _scene.value.copy(entities = _scene.value.entities + entity)
+        _selectedEntityId.value = entity.id
+        camera.target = entity.transform.position
+        setWorkspaceTab(WorkspaceTab.SCENE_VIEW)
+        log("Asset", "Spawned mesh asset: ${mesh.name}")
+    }
+
+    fun importAndSpawnGlbFile(file: File) {
+        try {
+            val inspection = GlbParser.inspectAndParseGlbFile(file)
+            spawnGlbFromInspection(inspection)
         } catch (e: Exception) {
             log("AssetError", "Gagal memproses file GLB: ${e.message}")
         }
@@ -668,10 +809,10 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     fun importGlbToAssets(file: File) {
         try {
-            val result = GlbParser.parse(file.inputStream(), file.nameWithoutExtension)
-            assetManager.meshes[result.mesh.id] = result.mesh
-            assetManager.materials[result.material.id] = result.material
-            log("Asset", "Model GLB disimpan di Asset Browser: ${result.name}")
+            val inspection = GlbParser.inspectAndParseGlbFile(file)
+            assetManager.meshes[inspection.mesh.id] = inspection.mesh
+            assetManager.materials[inspection.material.id] = inspection.material
+            log("Asset", "Model GLB disimpan di Asset Browser: ${inspection.modelName} (${inspection.mesh.vertexCount} verts)")
         } catch (e: Exception) {
             log("AssetError", "Gagal memproses file GLB: ${e.message}")
         }
@@ -713,6 +854,19 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
     }
 
     override fun getEntity(id: String): Entity? = _scene.value.findEntity(id)
+
+    override fun setCameraTarget(target: Vec3) {
+        camera.target = target
+    }
+
+    override fun setCameraDistance(distance: Float) {
+        camera.distance = distance.coerceIn(1.5f, 50.0f)
+    }
+
+    override fun setCameraOrbit(yaw: Float, pitch: Float) {
+        camera.yawDegrees = yaw
+        camera.pitchDegrees = pitch.coerceIn(-85f, 85f)
+    }
 
     // Raycast selection helper
     fun pickEntityAtScreen(screenX: Float, screenY: Float, width: Float, height: Float) {
@@ -790,7 +944,10 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
         _scene.value = project.scene
         _sceneName.value = project.scene.name
         initialSceneBackup = project.scene
-        _selectedEntityId.value = project.scene.entities.firstOrNull()?.id
+        val firstEntityId = project.scene.entities.firstOrNull()?.id
+        _selectedEntityId.value = firstEntityId
+        syncSceneScriptsToAssetManager(project.scene)
+        syncEditingScriptForSelectedEntity(firstEntityId)
         _isInLobby.value = false
         log("Project", "Loaded Scene: ${project.name} (${project.templateName})")
     }

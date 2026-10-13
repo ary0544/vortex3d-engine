@@ -36,6 +36,12 @@ class LuaInterpreter(
         variables["input_v"] = input.vertical
         variables["input_jump"] = input.actionJump
         variables["input_fire"] = input.actionFire
+        variables["pos_x"] = currentEntity.transform.position.x
+        variables["pos_y"] = currentEntity.transform.position.y
+        variables["pos_z"] = currentEntity.transform.position.z
+        variables["self_x"] = currentEntity.transform.position.x
+        variables["self_y"] = currentEntity.transform.position.y
+        variables["self_z"] = currentEntity.transform.position.z
         return executeFunction(script, "update", listOf(dt), currentEntity)
     }
 
@@ -170,6 +176,38 @@ class LuaInterpreter(
             if (params.isNotEmpty()) {
                 val sound = params[0].replace("\"", "").replace("'", "").trim()
                 callbacks.playSound(sound)
+            }
+        }
+        // Handle camera:set_target(x, y, z)
+        else if (clean.contains("camera:set_target(")) {
+            val params = extractParams(clean, "camera:set_target")
+            if (params.size >= 3) {
+                val tx = evalFloat(params[0])
+                val ty = evalFloat(params[1])
+                val tz = evalFloat(params[2])
+                callbacks.setCameraTarget(Vec3(tx, ty, tz))
+            }
+        }
+        // Handle camera:follow_self(offset_y) or camera:follow_entity()
+        else if (clean.contains("camera:follow_self(") || clean.contains("camera:follow_entity(") || clean == "camera:follow_self()" || clean == "camera:follow_entity()") {
+            val prefix = if (clean.contains("camera:follow_self")) "camera:follow_self" else "camera:follow_entity"
+            val params = extractParams(clean, prefix)
+            val offsetY = if (params.isNotEmpty()) evalFloat(params[0]) else 1.2f
+            val p = entity.transform.position
+            callbacks.setCameraTarget(Vec3(p.x, p.y + offsetY, p.z))
+        }
+        // Handle camera:set_distance(dist)
+        else if (clean.contains("camera:set_distance(")) {
+            val params = extractParams(clean, "camera:set_distance")
+            if (params.isNotEmpty()) {
+                callbacks.setCameraDistance(evalFloat(params[0]))
+            }
+        }
+        // Handle camera:set_orbit(yaw, pitch)
+        else if (clean.contains("camera:set_orbit(")) {
+            val params = extractParams(clean, "camera:set_orbit")
+            if (params.size >= 2) {
+                callbacks.setCameraOrbit(evalFloat(params[0]), evalFloat(params[1]))
             }
         }
         // Handle engine:log(msg)

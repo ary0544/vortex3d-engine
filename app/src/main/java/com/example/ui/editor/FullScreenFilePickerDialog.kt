@@ -482,14 +482,16 @@ fun FullScreenFilePickerDialog(
                                     onSelect = {
                                         if (item.isDirectory) {
                                             currentDir = item.file
+                                        } else if (item.extension.lowercase() == "glb") {
+                                            viewModel.openGlbInspection(item.file)
+                                            onDismiss()
                                         } else {
                                             selectedItem = item
                                         }
                                     },
                                     onQuickAction = {
                                         if (item.extension.lowercase() == "glb") {
-                                            viewModel.importAndSpawnGlbFile(item.file)
-                                            viewModel.setWorkspaceTab(WorkspaceTab.SCENE_VIEW)
+                                            viewModel.openGlbInspection(item.file)
                                             onDismiss()
                                         } else if (item.extension.lowercase() == "lua") {
                                             viewModel.importLuaFile(item.file)
@@ -551,15 +553,14 @@ fun FullScreenFilePickerDialog(
                                 if (fileItem.extension.lowercase() == "glb") {
                                     Button(
                                         onClick = {
-                                            viewModel.importAndSpawnGlbFile(fileItem.file)
-                                            viewModel.setWorkspaceTab(WorkspaceTab.SCENE_VIEW)
+                                            viewModel.openGlbInspection(fileItem.file)
                                             onDismiss()
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                                         modifier = Modifier.testTag("action_spawn_3d_btn")
                                     ) {
-                                        Text("Spawn ke 3D", color = Color(0xFF0A0E14), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text("Preview & Impor 3D", color = Color(0xFF0A0E14), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     }
                                 } else if (fileItem.extension.lowercase() == "lua") {
                                     Button(

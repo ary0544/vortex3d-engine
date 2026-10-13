@@ -99,9 +99,10 @@ fun LandscapeStudioScreen(
     val isLeftDockOpen by viewModel.isLeftDockOpen.collectAsState()
     val isRightDockOpen by viewModel.isRightDockOpen.collectAsState()
     val isBottomDockOpen by viewModel.isBottomDockOpen.collectAsState()
+    val rightDockTab by viewModel.rightDockTab.collectAsState()
+    val inspectingGlbResult by viewModel.inspectingGlbResult.collectAsState()
 
     var selectedLeftTab by remember { mutableIntStateOf(0) } // 0: Scene Tree, 1: Assets, 2: Files
-    var selectedRightTab by remember { mutableIntStateOf(0) } // 0: Inspector, 1: Lua, 2: Shaders, 3: AI Fix, 4: Docs
 
     Column(
         modifier = modifier
@@ -494,11 +495,11 @@ fun LandscapeStudioScreen(
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Right Sidebar Sub-Tab Bar
                         val rightTabs = listOf(
-                            Icons.Default.Tune to "Inspector",
-                            Icons.Default.Code to "Lua",
-                            Icons.Default.Palette to "Shaders",
-                            Icons.Default.Build to "AI Fix",
-                            Icons.Default.Book to "Docs"
+                            Triple(Icons.Default.Tune, "Inspector", com.example.viewmodel.RightDockTab.INSPECTOR),
+                            Triple(Icons.Default.Code, "Lua", com.example.viewmodel.RightDockTab.LUA_SCRIPT),
+                            Triple(Icons.Default.Palette, "Shaders", com.example.viewmodel.RightDockTab.SHADERS),
+                            Triple(Icons.Default.Build, "AI Fix", com.example.viewmodel.RightDockTab.AI_COPILOT),
+                            Triple(Icons.Default.Book, "Docs", com.example.viewmodel.RightDockTab.DOCS)
                         )
 
                         Row(
@@ -528,15 +529,15 @@ fun LandscapeStudioScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                rightTabs.forEachIndexed { idx, (icon, title) ->
-                                    val isSelected = selectedRightTab == idx
+                                rightTabs.forEach { (icon, title, tabEnum) ->
+                                    val isSelected = rightDockTab == tabEnum
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .fillMaxHeight()
                                             .clip(RoundedCornerShape(4.dp))
                                             .background(if (isSelected) Color(0xFF263345) else Color.Transparent)
-                                            .clickable { selectedRightTab = idx }
+                                            .clickable { viewModel.setRightDockTab(tabEnum) }
                                             .padding(horizontal = 2.dp, vertical = 2.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -565,12 +566,12 @@ fun LandscapeStudioScreen(
                         }
 
                         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                            when (selectedRightTab) {
-                                0 -> InspectorView(viewModel = viewModel)
-                                1 -> LuaEditorView(viewModel = viewModel)
-                                2 -> ShaderEditorView(viewModel = viewModel)
-                                3 -> AiPromptView(viewModel = viewModel)
-                                4 -> DocumentationView(viewModel = viewModel)
+                            when (rightDockTab) {
+                                com.example.viewmodel.RightDockTab.INSPECTOR -> InspectorView(viewModel = viewModel)
+                                com.example.viewmodel.RightDockTab.LUA_SCRIPT -> LuaEditorView(viewModel = viewModel)
+                                com.example.viewmodel.RightDockTab.SHADERS -> ShaderEditorView(viewModel = viewModel)
+                                com.example.viewmodel.RightDockTab.AI_COPILOT -> AiPromptView(viewModel = viewModel)
+                                com.example.viewmodel.RightDockTab.DOCS -> DocumentationView(viewModel = viewModel)
                             }
                         }
                     }
@@ -585,6 +586,15 @@ fun LandscapeStudioScreen(
                 modifier = Modifier.height(95.dp),
                 isExpanded = true,
                 onToggleExpand = { viewModel.toggleBottomDock() }
+            )
+        }
+
+        // 5. GODOT-STYLE 3D GLB IMPORT & PREVIEW MODAL
+        inspectingGlbResult?.let { inspection ->
+            GlbImportPreviewDialog(
+                inspection = inspection,
+                viewModel = viewModel,
+                onDismiss = { viewModel.closeGlbInspection() }
             )
         }
     }

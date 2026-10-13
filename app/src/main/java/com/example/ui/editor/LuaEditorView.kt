@@ -17,14 +17,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.CodeOff
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -34,6 +38,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -55,7 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.viewmodel.EngineViewModel
-import com.example.viewmodel.WorkspaceTab
 
 @Composable
 fun LuaEditorView(
@@ -64,17 +69,16 @@ fun LuaEditorView(
 ) {
     val context = LocalContext.current
     val currentScript by viewModel.editingScript.collectAsState()
-    val allScripts = viewModel.assetManager.scripts.values.toList()
+    val allScripts by viewModel.scriptsState.collectAsState()
     val scene by viewModel.scene.collectAsState()
     val selectedId by viewModel.selectedEntityId.collectAsState()
     val selectedEntity = scene.findEntity(selectedId ?: "")
 
-    val script = currentScript ?: allScripts.firstOrNull() ?: return
-    var codeContent by remember(script.id) { mutableStateOf(script.content) }
     var scriptDropdownExpanded by remember { mutableStateOf(false) }
     var entityPickerExpanded by remember { mutableStateOf(false) }
-
-    val isAttachedToSelected = selectedEntity?.luaScript?.scriptId == script.id
+    var showNewScriptDialog by remember { mutableStateOf(false) }
+    var newScriptName by remember { mutableStateOf("") }
+    var selectedTemplate by remember { mutableStateOf("hero") }
 
     Column(
         modifier = modifier
@@ -94,22 +98,55 @@ fun LuaEditorView(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                     modifier = Modifier.height(30.dp).testTag("select_script_dropdown")
                 ) {
-                    Text(script.name, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    Text(
+                        text = currentScript?.name ?: "Pilih Script...",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = if (currentScript != null) Color.White else Color(0xFF00E5FF)
+                    )
                 }
 
                 DropdownMenu(
                     expanded = scriptDropdownExpanded,
                     onDismissRequest = { scriptDropdownExpanded = false }
                 ) {
+                    Text(
+                        text = "Daftar Script Proyek:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF00E5FF),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+
                     allScripts.forEach { item ->
                         DropdownMenuItem(
-                            text = { Text(item.name, fontSize = 12.sp) },
+                            text = {
+                                Column {
+                                    Text(item.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(item.description, fontSize = 10.sp, color = Color.Gray, maxLines = 1)
+                                }
+                            },
                             onClick = {
                                 viewModel.editScript(item)
                                 scriptDropdownExpanded = false
                             }
                         )
                     }
+
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF00E676), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Buat Script Baru...", color = Color(0xFF00E676), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        },
+                        onClick = {
+                            scriptDropdownExpanded = false
+                            newScriptName = if (selectedEntity != null) "${selectedEntity.name}_Script" else "MyScript"
+                            showNewScriptDialog = true
+                        }
+                    )
                 }
             }
 
@@ -129,187 +166,371 @@ fun LuaEditorView(
                     Spacer(Modifier.width(4.dp))
                 }
 
-                // Copy Code to Clipboard Button
-                OutlinedButton(
-                    onClick = {
-                        viewModel.copyToClipboard(
-                            context = context,
-                            text = codeContent,
-                            label = "Kode Lua ${script.name}"
-                        )
-                    },
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                    modifier = Modifier.height(28.dp).testTag("copy_script_button")
-                ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(13.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text("Salin", fontSize = 10.sp, color = Color(0xFF00E5FF))
-                }
+                if (currentScript != null) {
+                    // Copy Code to Clipboard Button
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.copyToClipboard(
+                                context = context,
+                                text = currentScript!!.content,
+                                label = "Kode Lua ${currentScript!!.name}"
+                            )
+                        },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp).testTag("copy_script_button")
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text("Salin", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                    }
 
-                Spacer(Modifier.width(4.dp))
-
-                Button(
-                    onClick = { viewModel.saveScript(script.id, codeContent) },
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    modifier = Modifier.height(28.dp).testTag("save_script_button")
-                ) {
-                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(13.dp))
-                    Spacer(Modifier.width(3.dp))
-                    Text("Save", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(4.dp))
                 }
             }
         }
 
         Spacer(Modifier.height(6.dp))
 
-        // Direct Entity Attachment Ribbon Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF161B22))
-                .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Link,
-                    contentDescription = null,
-                    tint = if (isAttachedToSelected) Color(0xFF00E676) else Color(0xFF00E5FF),
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-
-                if (selectedEntity != null) {
-                    Text(
-                        text = "Target: ${selectedEntity.name}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White
+        // Body Content: Script Editor OR Dedicated Empty-State
+        if (currentScript == null) {
+            // EMPTY STATE VIEW
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CodeOff,
+                        contentDescription = null,
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(42.dp)
                     )
-                    Spacer(Modifier.width(4.dp))
-                    if (isAttachedToSelected) {
+                    Spacer(Modifier.height(10.dp))
+
+                    if (selectedEntity != null) {
                         Text(
-                            text = "(Terpasang)",
-                            fontSize = 10.sp,
+                            text = "Entitas '${selectedEntity.name}' Belum Memiliki Script",
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF00E676)
+                            color = Color.White
                         )
-                    }
-                } else {
-                    Text(
-                        text = "Belum ada entitas dipilih",
-                        fontSize = 11.sp,
-                        color = Color(0xFF8B949E)
-                    )
-                }
-            }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Tambahkan logika interaktif untuk mengontrol pergerakan, fisika, atau event tabrakan objek ini.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF8B949E),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (selectedEntity != null) {
-                    if (isAttachedToSelected) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF21262D))
-                                .clickable { viewModel.detachScriptFromSelectedEntity() }
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                        Spacer(Modifier.height(14.dp))
+
+                        Button(
+                            onClick = {
+                                newScriptName = "${selectedEntity.name}_Script"
+                                showNewScriptDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                            modifier = Modifier.fillMaxWidth().testTag("empty_state_create_script_button")
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.LinkOff, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(12.dp))
-                                Spacer(Modifier.width(3.dp))
-                                Text("Lepas", fontSize = 10.sp, color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Buat Script Baru untuk ${selectedEntity.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+                        Text("Atau pasang template cepat:", fontSize = 10.sp, color = Color(0xFF8B949E))
+                        Spacer(Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.createAndAttachScript("${selectedEntity.name}_Odyssey", "odyssey")
+                                },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("⚔️ Odyssey TPP", fontSize = 10.sp, maxLines = 1)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.createAndAttachScript("${selectedEntity.name}_Rotator", "orbit")
+                                },
+                                modifier = Modifier.weight(1f),
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("🔄 Rotator", fontSize = 10.sp, maxLines = 1)
                             }
                         }
                     } else {
-                        Button(
-                            onClick = { viewModel.attachScriptToSelectedEntity(script.id) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            modifier = Modifier.height(24.dp).testTag("attach_script_from_lua_panel"),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF))
-                        ) {
-                            Text("Attach ke ${selectedEntity.name}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                        }
-                    }
-                } else {
-                    Box {
-                        OutlinedButton(
-                            onClick = { entityPickerExpanded = true },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                            modifier = Modifier.height(24.dp)
-                        ) {
-                            Text("Pilih Entitas...", fontSize = 10.sp)
-                        }
-
-                        DropdownMenu(
-                            expanded = entityPickerExpanded,
-                            onDismissRequest = { entityPickerExpanded = false }
-                        ) {
-                            scene.entities.forEach { entity ->
-                                DropdownMenuItem(
-                                    text = { Text(entity.name, fontSize = 11.sp) },
-                                    onClick = {
-                                        viewModel.selectEntity(entity.id)
-                                        viewModel.attachScriptToEntity(entity.id, script.id)
-                                        entityPickerExpanded = false
-                                    }
-                                )
-                            }
-                        }
+                        Text(
+                            text = "Tidak Ada Entitas Terpilih",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Pilih salah satu objek di Scene Hierarchy untuk mengedit skripnya, atau buka skrip dari daftar pustaka di atas.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF8B949E),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
                     }
                 }
             }
-        }
+        } else {
+            // SCRIPT EDITOR VIEW
+            val script = currentScript!!
+            var codeContent by remember(script.id, script.content) { mutableStateOf(script.content) }
+            val isAttachedToSelected = selectedEntity?.luaScript?.scriptId == script.id
 
-        Spacer(Modifier.height(6.dp))
-
-        // Quick Snippets Toolbar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            SnippetChip("+ update(dt)") { codeContent += "\nfunction update(dt)\n    \nend\n" }
-            SnippetChip("+ apply_force") { codeContent += "\nphysics:apply_force(input_h * 15.0, 0, input_v * 15.0)\n" }
-            SnippetChip("+ apply_impulse") { codeContent += "\nphysics:apply_impulse(0, 8.5, 0)\n" }
-            SnippetChip("+ rotate") { codeContent += "\nentity:rotate(0, 45.0 * dt, 0)\n" }
-            SnippetChip("+ play_sound") { codeContent += "\nengine:play_sound(\"jump\")\n" }
-            SnippetChip("+ on_collision") { codeContent += "\nfunction on_collision(other)\n    engine:log(\"Tabrakan dengan: \" .. other)\nend\n" }
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Code Editor Field
-        Card(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            TextField(
-                value = codeContent,
-                onValueChange = { codeContent = it },
+            // Direct Entity Attachment Ribbon Bar
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .testTag("lua_code_input"),
-                textStyle = TextStyle(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    color = Color(0xFFE6EDF3),
-                    lineHeight = 18.sp
-                ),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFF161B22),
-                    unfocusedContainerColor = Color(0xFF161B22),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF161B22))
+                    .border(1.dp, Color(0xFF30363D), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Link,
+                        contentDescription = null,
+                        tint = if (isAttachedToSelected) Color(0xFF00E676) else Color(0xFF00E5FF),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+
+                    if (selectedEntity != null) {
+                        Text(
+                            text = "Target: ${selectedEntity.name}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        if (isAttachedToSelected) {
+                            Text(
+                                text = "(Terpasang)",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF00E676)
+                            )
+                        } else {
+                            Text(
+                                text = "(Script Lain)",
+                                fontSize = 10.sp,
+                                color = Color(0xFF8B949E)
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "Belum ada entitas dipilih",
+                            fontSize = 11.sp,
+                            color = Color(0xFF8B949E)
+                        )
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (selectedEntity != null) {
+                        if (isAttachedToSelected) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFF21262D))
+                                    .clickable { viewModel.detachScriptFromSelectedEntity() }
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.LinkOff, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(12.dp))
+                                    Spacer(Modifier.width(3.dp))
+                                    Text("Lepas", fontSize = 10.sp, color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = { viewModel.attachScriptToSelectedEntity(script.id) },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier.height(24.dp).testTag("attach_script_from_lua_panel"),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF))
+                            ) {
+                                Text("Attach ke ${selectedEntity.name}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                            }
+                        }
+                    } else {
+                        Box {
+                            OutlinedButton(
+                                onClick = { entityPickerExpanded = true },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                modifier = Modifier.height(24.dp)
+                            ) {
+                                Text("Pilih Entitas...", fontSize = 10.sp)
+                            }
+
+                            DropdownMenu(
+                                expanded = entityPickerExpanded,
+                                onDismissRequest = { entityPickerExpanded = false }
+                            ) {
+                                scene.entities.forEach { entity ->
+                                    DropdownMenuItem(
+                                        text = { Text(entity.name, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.selectEntity(entity.id)
+                                            viewModel.attachScriptToEntity(entity.id, script.id)
+                                            entityPickerExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.width(6.dp))
+
+                    Button(
+                        onClick = { viewModel.saveScript(script.id, codeContent) },
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(24.dp).testTag("save_script_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF238636))
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(12.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text("Save", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            // Quick Snippets Toolbar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                SnippetChip("+ update(dt)") { codeContent += "\nfunction update(dt)\n    \nend\n" }
+                SnippetChip("+ apply_force") { codeContent += "\nphysics:apply_force(input_h * 15.0, 0, input_v * 15.0)\n" }
+                SnippetChip("+ apply_impulse") { codeContent += "\nphysics:apply_impulse(0, 8.5, 0)\n" }
+                SnippetChip("+ rotate") { codeContent += "\nentity:rotate(0, 45.0 * dt, 0)\n" }
+                SnippetChip("+ play_sound") { codeContent += "\nengine:play_sound(\"jump\")\n" }
+                SnippetChip("+ on_collision") { codeContent += "\nfunction on_collision(other)\n    engine:log(\"Tabrakan dengan: \" .. other)\nend\n" }
+            }
+
+            Spacer(Modifier.height(6.dp))
+
+            // Code Editor Field
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                TextField(
+                    value = codeContent,
+                    onValueChange = { codeContent = it },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("lua_code_input"),
+                    textStyle = TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        color = Color(0xFFE6EDF3),
+                        lineHeight = 18.sp
+                    ),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color(0xFF161B22),
+                        unfocusedContainerColor = Color(0xFF161B22),
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    )
                 )
-            )
+            }
         }
+    }
+
+    if (showNewScriptDialog) {
+        AlertDialog(
+            onDismissRequest = { showNewScriptDialog = false },
+            title = { Text("Buat & Pasang Script Lua", fontSize = 14.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    OutlinedTextField(
+                        value = newScriptName,
+                        onValueChange = { newScriptName = it },
+                        label = { Text("Nama Script") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text("Pilih Template Dasar:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    listOf(
+                        "odyssey" to "⚔️ Assassin Odyssey (Analog & Camera Follow)",
+                        "hero" to "🎮 TPP Hero / Character Controller",
+                        "orbit" to "🔄 Orbit / Rotasi Objek 3D",
+                        "terrain" to "⛰️ Permukaan Tanah GLB / Collider",
+                        "custom" to "📝 Blank Script Kosong"
+                    ).forEach { (type, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedTemplate = type }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedTemplate == type,
+                                onClick = { selectedTemplate = type }
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(label, fontSize = 11.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.createAndAttachScript(
+                            name = if (newScriptName.isBlank()) "entity_script" else newScriptName,
+                            templateType = selectedTemplate
+                        )
+                        showNewScriptDialog = false
+                    }
+                ) {
+                    Text("Buat & Attach", fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showNewScriptDialog = false }) {
+                    Text("Batal", fontSize = 12.sp)
+                }
+            }
+        )
     }
 }
 

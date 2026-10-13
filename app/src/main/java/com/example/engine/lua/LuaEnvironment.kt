@@ -8,6 +8,9 @@ interface EngineCallbacks {
     fun playSound(soundName: String)
     fun updateEntity(updated: Entity)
     fun getEntity(id: String): Entity?
+    fun setCameraTarget(target: Vec3) {}
+    fun setCameraDistance(distance: Float) {}
+    fun setCameraOrbit(yaw: Float, pitch: Float) {}
 }
 
 data class InputState(

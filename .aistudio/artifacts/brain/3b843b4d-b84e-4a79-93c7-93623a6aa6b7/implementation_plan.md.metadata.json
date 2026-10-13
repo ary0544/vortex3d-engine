@@ -1,0 +1,6 @@
+{
+  "summary": "Rencana implementasi Dialog Import & Preview GLB 3D Komprehensif ala Godot Engine:\n1. Dialog Godot-style 'Advanced 3D Import & Preview' dengan Canvas orbit 3D interaktif real-time, toggle wireframe/shaded, dan grid referensi.\n2. Parser glTF/GLB yang ditingkatkan untuk mendeteksi struktur node pohon hierarki, tulang/skeleton (skins), daftar klip animasi (animations), dan material PBR.\n3. Kontrol Pemutar Animasi (Play, Pause, Timeline slider, Loop toggle, pemilih klip animasi) serta inspeksi hierarki tulang (Bone & Node Tree Explorer).\n4. Normalisasi skala otomatis (Bounding Box fitting) dan auto-focus kamera viewport saat model di-spawn agar tidak hilang atau tertutup objek lain.\n5. Generator Collider (Box, Sphere, Capsule, Mesh/Convex) dan tipe peran entitas (Dynamic Actor, Static Ground, Prop).",
+  "updatedAt": "2026-10-13T14:13:43.842765526Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

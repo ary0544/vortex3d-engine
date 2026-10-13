@@ -147,7 +147,7 @@ private fun MeshesTab(viewModel: EngineViewModel) {
                     }
 
                     Button(
-                        onClick = { viewModel.addPrimitive(mesh.name.lowercase()) },
+                        onClick = { viewModel.spawnMeshAsset(mesh) },
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                         modifier = Modifier.height(28.dp)
                     ) {
