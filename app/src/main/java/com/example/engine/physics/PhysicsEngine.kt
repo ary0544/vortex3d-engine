@@ -48,9 +48,21 @@ class PhysicsEngine(
             // Apply air resistance / damping
             vel = vel * 0.995f
 
+            // Batasi kecepatan terminal agar tidak terjadi pelontaran tak terbatas (runaway velocity)
+            val maxSpeed = 35.0f
+            if (vel.length() > maxSpeed) {
+                vel = vel.normalized() * maxSpeed
+            }
+
             var angVel = rb.angularVelocity * 0.98f
 
-            val newPos = entity.transform.position + vel * safeDt
+            val rawPos = entity.transform.position + vel * safeDt
+            // Koordinat aman dunia 3D untuk mencegah letupan ke angka jutaan
+            val newPos = Vec3(
+                rawPos.x.coerceIn(-500.0f, 500.0f),
+                rawPos.y.coerceIn(-50.0f, 250.0f),
+                rawPos.z.coerceIn(-500.0f, 500.0f)
+            )
             val newRot = entity.transform.rotation + Vec3(angVel.x, angVel.y, angVel.z) * safeDt
 
             updated[i] = entity.copy(

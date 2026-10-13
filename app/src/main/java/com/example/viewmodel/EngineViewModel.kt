@@ -346,6 +346,14 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
         }
 
         _scene.value = _scene.value.copy(entities = collisionUpdated)
+
+        // Reset pulsa input satu frame (Jump / Fire) agar tidak tertekan selamanya
+        if (inputState.actionJump) {
+            inputState.actionJump = false
+        }
+        if (inputState.actionFire) {
+            inputState.actionFire = false
+        }
     }
 
     fun toggleSimulation() {
@@ -358,8 +366,11 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     fun resetSimulation() {
         _isSimulating.value = false
+        inputState.actionJump = false
+        inputState.actionFire = false
         _scene.value = initialSceneBackup
         luaInterpreters.clear()
+        camera.reset()
         log("Engine", "Simulation Reset to initial state")
     }
 
@@ -372,6 +383,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
         } else {
             _isPlayMode.value = false
             _isSimulating.value = false
+            inputState.actionJump = false
+            inputState.actionFire = false
             _scene.value = initialSceneBackup
             luaInterpreters.clear()
             log("Engine", "Exited Game Play Mode")
