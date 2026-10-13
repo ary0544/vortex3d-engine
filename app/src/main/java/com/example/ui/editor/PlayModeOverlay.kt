@@ -61,6 +61,7 @@ fun PlayModeOverlay(
     val scene by viewModel.scene.collectAsState()
     val isWireframe by viewModel.isWireframeMode.collectAsState()
     val cameraRev by viewModel.cameraRevision.collectAsState()
+    val cameraSettings by viewModel.cameraSettings.collectAsState()
 
     var stickOffset by remember { mutableStateOf(Offset.Zero) }
     val maxStickRadius = 60f
@@ -71,14 +72,16 @@ fun PlayModeOverlay(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("play_mode_canvas")
-                .pointerInput(Unit) {
+                .pointerInput(cameraSettings) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
                         // Right screen camera drag
                         if (change.position.x > size.width * 0.4f) {
+                            val multX = if (cameraSettings.invertX) -1f else 1f
+                            val multY = if (cameraSettings.invertY) -1f else 1f
                             viewModel.orbitCamera(
-                                deltaYaw = dragAmount.x * 0.4f,
-                                deltaPitch = -dragAmount.y * 0.4f
+                                deltaYaw = multX * dragAmount.x * 0.4f * cameraSettings.orbitSensitivity,
+                                deltaPitch = multY * dragAmount.y * 0.4f * cameraSettings.orbitSensitivity
                             )
                         }
                     }

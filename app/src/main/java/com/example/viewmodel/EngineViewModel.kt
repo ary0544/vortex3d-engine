@@ -93,6 +93,14 @@ data class ConsoleLogItem(
     val timestamp: String = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
 )
 
+data class CameraSettings(
+    val invertX: Boolean = false,
+    val invertY: Boolean = false,
+    val orbitSensitivity: Float = 1.0f,
+    val panSensitivity: Float = 1.0f,
+    val zoomSensitivity: Float = 1.0f
+)
+
 class EngineViewModel : ViewModel(), EngineCallbacks {
 
     val camera = Camera3D()
@@ -200,6 +208,9 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     private val _cameraRevision = MutableStateFlow(0L)
     val cameraRevision: StateFlow<Long> = _cameraRevision.asStateFlow()
+
+    private val _cameraSettings = MutableStateFlow(CameraSettings())
+    val cameraSettings: StateFlow<CameraSettings> = _cameraSettings.asStateFlow()
 
     private val _isWireframeMode = MutableStateFlow(false)
     val isWireframeMode: StateFlow<Boolean> = _isWireframeMode.asStateFlow()
@@ -343,6 +354,51 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     fun panCamera(deltaX: Float, deltaY: Float) {
         camera.pan(deltaX, deltaY)
+        _cameraRevision.value++
+    }
+
+    fun setInvertX(invert: Boolean) {
+        _cameraSettings.value = _cameraSettings.value.copy(invertX = invert)
+    }
+
+    fun setInvertY(invert: Boolean) {
+        _cameraSettings.value = _cameraSettings.value.copy(invertY = invert)
+    }
+
+    fun setOrbitSensitivity(sensitivity: Float) {
+        _cameraSettings.value = _cameraSettings.value.copy(orbitSensitivity = sensitivity.coerceIn(0.2f, 3.0f))
+    }
+
+    fun setPanSensitivity(sensitivity: Float) {
+        _cameraSettings.value = _cameraSettings.value.copy(panSensitivity = sensitivity.coerceIn(0.2f, 3.0f))
+    }
+
+    fun setZoomSensitivity(sensitivity: Float) {
+        _cameraSettings.value = _cameraSettings.value.copy(zoomSensitivity = sensitivity.coerceIn(0.2f, 3.0f))
+    }
+
+    fun resetCamera() {
+        camera.reset()
+        _cameraRevision.value++
+    }
+
+    fun setCameraFrontView() {
+        camera.setFrontView()
+        _cameraRevision.value++
+    }
+
+    fun setCameraTopView() {
+        camera.setTopView()
+        _cameraRevision.value++
+    }
+
+    fun setCameraSideView() {
+        camera.setSideView()
+        _cameraRevision.value++
+    }
+
+    fun setCameraIsometricView() {
+        camera.setIsometricView()
         _cameraRevision.value++
     }
 

@@ -52,4 +52,31 @@ class Camera3D(
 
         target = target + right * deltaX + up * deltaY
     }
+
+    fun reset() {
+        target = Vec3(0f, 1f, 0f)
+        distance = 8.0f
+        pitchDegrees = 30.0f
+        yawDegrees = 45.0f
+    }
+
+    fun setFrontView() {
+        pitchDegrees = 0.0f
+        yawDegrees = 0.0f
+    }
+
+    fun setTopView() {
+        pitchDegrees = 85.0f
+        yawDegrees = 0.0f
+    }
+
+    fun setSideView() {
+        pitchDegrees = 0.0f
+        yawDegrees = 90.0f
+    }
+
+    fun setIsometricView() {
+        pitchDegrees = 30.0f
+        yawDegrees = 45.0f
+    }
 }
