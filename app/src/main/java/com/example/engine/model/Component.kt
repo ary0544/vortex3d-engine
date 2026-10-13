@@ -11,15 +11,23 @@ data class TransformComponent(
     val rotation: Vec3 = Vec3.ZERO, // Euler angles in degrees (pitch, yaw, roll)
     val scale: Vec3 = Vec3.ONE
 ) : Component {
+    @Transient
+    private var cachedMatrix: Mat4? = null
+
     fun getLocalMatrix(): Mat4 {
-        val t = Mat4.translation(position)
-        val r = Mat4.euler(
-            MathUtils.toRadians(rotation.x),
-            MathUtils.toRadians(rotation.y),
-            MathUtils.toRadians(rotation.z)
-        )
-        val s = Mat4.scale(scale)
-        return t * r * s
+        var m = cachedMatrix
+        if (m == null) {
+            val t = Mat4.translation(position)
+            val r = Mat4.euler(
+                MathUtils.toRadians(rotation.x),
+                MathUtils.toRadians(rotation.y),
+                MathUtils.toRadians(rotation.z)
+            )
+            val s = Mat4.scale(scale)
+            m = t * r * s
+            cachedMatrix = m
+        }
+        return m
     }
 }
 

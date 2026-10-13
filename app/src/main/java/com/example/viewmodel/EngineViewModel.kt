@@ -23,6 +23,7 @@ import com.example.engine.model.TransformComponent
 import com.example.engine.physics.PhysicsEngine
 import com.example.engine.renderer.Camera3D
 import com.example.engine.renderer.RenderStats
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -109,6 +110,9 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     private val _scene = MutableStateFlow(Scene.createDefaultPhysicsPlayground())
     val scene: StateFlow<Scene> = _scene.asStateFlow()
+
+    private val _sceneName = MutableStateFlow(_scene.value.name)
+    val sceneName: StateFlow<String> = _sceneName.asStateFlow()
 
     private var initialSceneBackup = _scene.value
 
@@ -236,7 +240,7 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     private fun startSimulationLoop() {
         simulationJob?.cancel()
-        simulationJob = viewModelScope.launch {
+        simulationJob = viewModelScope.launch(Dispatchers.Default) {
             var lastTime = System.currentTimeMillis()
             while (isActive) {
                 val now = System.currentTimeMillis()
@@ -703,6 +707,7 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
     fun openProject(project: ProjectItem) {
         _activeProjectId.value = project.id
         _scene.value = project.scene
+        _sceneName.value = project.scene.name
         initialSceneBackup = project.scene
         _selectedEntityId.value = project.scene.entities.firstOrNull()?.id
         _isInLobby.value = false

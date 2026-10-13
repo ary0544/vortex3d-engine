@@ -31,11 +31,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -58,10 +62,17 @@ fun PlayModeOverlay(
     viewModel: EngineViewModel,
     modifier: Modifier = Modifier
 ) {
-    val scene by viewModel.scene.collectAsState()
     val isWireframe by viewModel.isWireframeMode.collectAsState()
-    val cameraRev by viewModel.cameraRevision.collectAsState()
     val cameraSettings by viewModel.cameraSettings.collectAsState()
+
+    var frameTick by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            withFrameNanos { timeNanos ->
+                frameTick = timeNanos
+            }
+        }
+    }
 
     var stickOffset by remember { mutableStateOf(Offset.Zero) }
     val maxStickRadius = 60f
@@ -87,10 +98,11 @@ fun PlayModeOverlay(
                     }
                 }
         ) {
-            if (cameraRev >= 0) {
+            if (frameTick >= 0L) {
+                val currentScene = viewModel.scene.value
                 val renderStats = EngineRenderer.renderScene(
                     drawScope = this,
-                    scene = scene,
+                    scene = currentScene,
                     camera = viewModel.camera,
                     assets = viewModel.assetManager,
                     selectedEntityId = null,

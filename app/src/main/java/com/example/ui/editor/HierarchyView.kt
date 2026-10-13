@@ -62,7 +62,8 @@ fun HierarchyView(
     var showAddMenu by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
-    val filteredEntities = remember(scene.entities, searchQuery) {
+    val entityKeys = remember(scene.entities) { scene.entities.map { it.id to it.name } }
+    val filteredEntities = remember(entityKeys, searchQuery) {
         if (searchQuery.isBlank()) scene.entities
         else scene.entities.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }

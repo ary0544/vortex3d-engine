@@ -40,11 +40,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -63,12 +67,20 @@ fun Viewport3D(
     viewModel: EngineViewModel,
     modifier: Modifier = Modifier
 ) {
-    val scene by viewModel.scene.collectAsState()
     val selectedId by viewModel.selectedEntityId.collectAsState()
     val isSimulating by viewModel.isSimulating.collectAsState()
     val isWireframe by viewModel.isWireframeMode.collectAsState()
-    val cameraRev by viewModel.cameraRevision.collectAsState()
     val cameraSettings by viewModel.cameraSettings.collectAsState()
+
+    // Godot 4-style Continuous 60 FPS VSync render loop
+    var frameTick by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            withFrameNanos { timeNanos ->
+                frameTick = timeNanos
+            }
+        }
+    }
 
     var showCameraSettings by remember { mutableStateOf(false) }
 
@@ -173,14 +185,16 @@ fun Viewport3D(
                     }
                 }
         ) {
-            // Read cameraRev to trigger redraw on camera change
-            if (cameraRev >= 0) {
+            // Read frameTick to trigger redraw on every VSync tick (~60 FPS)
+            if (frameTick >= 0L) {
+                val currentScene = viewModel.scene.value
+                val currentSelectedId = selectedId
                 val renderStats = EngineRenderer.renderScene(
                     drawScope = this,
-                    scene = scene,
+                    scene = currentScene,
                     camera = viewModel.camera,
                     assets = viewModel.assetManager,
-                    selectedEntityId = selectedId,
+                    selectedEntityId = currentSelectedId,
                     timeSeconds = viewModel.elapsedTimeSeconds,
                     renderWireframeOnly = isWireframe
                 )
@@ -449,7 +463,6 @@ fun Viewport3D(
         // Isolated Viewport Stats Badge
         RenderStatsBadge(
             viewModel = viewModel,
-            entityCount = scene.entities.size,
             modifier = Modifier.align(Alignment.TopEnd)
         )
 
@@ -468,7 +481,6 @@ fun Viewport3D(
 @Composable
 fun RenderStatsBadge(
     viewModel: EngineViewModel,
-    entityCount: Int,
     modifier: Modifier = Modifier
 ) {
     val stats by viewModel.renderStats.collectAsState()
@@ -507,7 +519,7 @@ fun RenderStatsBadge(
                 modifier = Modifier.padding(end = 6.dp)
             )
             Text(
-                text = "$entityCount Ents",
+                text = "${stats.entityCount} Ents",
                 color = Color(0xFFFFCC80),
                 fontSize = 10.sp
             )

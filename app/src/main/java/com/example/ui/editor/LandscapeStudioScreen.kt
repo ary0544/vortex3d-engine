@@ -82,7 +82,7 @@ fun LandscapeStudioScreen(
 ) {
     val isSimulating by viewModel.isSimulating.collectAsState()
     val isWireframe by viewModel.isWireframeMode.collectAsState()
-    val scene by viewModel.scene.collectAsState()
+    val sceneName by viewModel.sceneName.collectAsState()
     val isLeftDockOpen by viewModel.isLeftDockOpen.collectAsState()
     val isRightDockOpen by viewModel.isRightDockOpen.collectAsState()
     val isBottomDockOpen by viewModel.isBottomDockOpen.collectAsState()
@@ -146,7 +146,7 @@ fun LandscapeStudioScreen(
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = scene.name,
+                            text = sceneName,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFFF0F6FC),

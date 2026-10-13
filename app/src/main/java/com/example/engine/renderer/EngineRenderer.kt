@@ -22,6 +22,7 @@ data class RenderStats(
     val drawCalls: Int = 0,
     val trianglesDrawn: Int = 0,
     val verticesProcessed: Int = 0,
+    val entityCount: Int = 0,
     val fps: Int = 60,
     val frameTimeMs: Float = 0f
 )
@@ -91,7 +92,7 @@ object EngineRenderer {
         if (lastFrameTimeNano != 0L) {
             val deltaNano = renderStartNano - lastFrameTimeNano
             val deltaMs = deltaNano / 1_000_000f
-            if (deltaMs in 1.0f..350.0f) {
+            if (deltaMs in 2.0f..120.0f) {
                 frameDeltas[frameDeltaIndex] = deltaMs
                 frameDeltaIndex = (frameDeltaIndex + 1) % frameDeltas.size
                 var sum = 0f
@@ -101,6 +102,13 @@ object EngineRenderer {
                 if (avgMs > 0.01f) {
                     measuredFps = (1000f / avgMs).toInt().coerceIn(1, 120)
                 }
+            } else if (deltaMs > 120.0f) {
+                // Idle or tab resume: re-seed window with smooth 60 FPS
+                for (i in frameDeltas.indices) {
+                    frameDeltas[i] = 16.6f
+                }
+                measuredFps = 60
+                measuredFrameTimeMs = 16.6f
             }
         }
         lastFrameTimeNano = renderStartNano
@@ -291,10 +299,9 @@ object EngineRenderer {
             }
         }
 
-        // 4. Sort triangles by depth (Painter's algorithm: farthest first)
+        // 4. Sort triangles by depth (Painter's algorithm: farthest first, zero GC pressure)
         if (triangleCount > 1) {
-            val subList = trianglePool.subList(0, triangleCount)
-            subList.sortByDescending { it.avgDepth }
+            sortTrianglesByDepth(triangleCount)
         }
 
         // 5. Draw sorted triangles using single reusable path (zero GC pressure)
@@ -327,6 +334,7 @@ object EngineRenderer {
             drawCalls = drawCalls,
             trianglesDrawn = totalTriangles,
             verticesProcessed = totalVertices,
+            entityCount = scene.entities.size,
             fps = measuredFps,
             frameTimeMs = renderDurationMs
         )
@@ -493,5 +501,36 @@ object EngineRenderer {
 
         // Center origin ring
         drawScope.drawCircle(Color.White, radius = 4f, center = o2D)
+    }
+
+    private fun sortTrianglesByDepth(count: Int) {
+        if (count <= 1) return
+        quickSortTriangles(0, count - 1)
+    }
+
+    private fun quickSortTriangles(low: Int, high: Int) {
+        if (low < high) {
+            val pIndex = partitionTriangles(low, high)
+            quickSortTriangles(low, pIndex - 1)
+            quickSortTriangles(pIndex + 1, high)
+        }
+    }
+
+    private fun partitionTriangles(low: Int, high: Int): Int {
+        val pivot = trianglePool[high].avgDepth
+        var i = low - 1
+        for (j in low until high) {
+            // Farthest first (descending depth)
+            if (trianglePool[j].avgDepth >= pivot) {
+                i++
+                val temp = trianglePool[i]
+                trianglePool[i] = trianglePool[j]
+                trianglePool[j] = temp
+            }
+        }
+        val temp = trianglePool[i + 1]
+        trianglePool[i + 1] = trianglePool[high]
+        trianglePool[high] = temp
+        return i + 1
     }
 }
