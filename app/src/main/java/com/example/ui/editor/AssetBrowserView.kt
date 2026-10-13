@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +54,7 @@ fun AssetBrowserView(
     modifier: Modifier = Modifier
 ) {
     var selectedCategoryIndex by remember { mutableIntStateOf(0) }
+    var showFullScreenPicker by remember { mutableStateOf(false) }
     val categories = listOf("3D Meshes", "Prefabs", "Materials", "Lua Scripts", "Audio SFX", "Shaders")
 
     Column(
@@ -74,7 +76,7 @@ fun AssetBrowserView(
             )
 
             Button(
-                onClick = { viewModel.setWorkspaceTab(com.example.viewmodel.WorkspaceTab.FILE_MANAGER) },
+                onClick = { showFullScreenPicker = true },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                 modifier = Modifier.height(30.dp).testTag("import_glb_file_manager_button")
             ) {
@@ -110,6 +112,13 @@ fun AssetBrowserView(
             4 -> AudioTab(viewModel)
             5 -> ShadersTab(viewModel)
         }
+    }
+
+    if (showFullScreenPicker) {
+        FullScreenFilePickerDialog(
+            viewModel = viewModel,
+            onDismiss = { showFullScreenPicker = false }
+        )
     }
 }
 

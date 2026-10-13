@@ -2,8 +2,8 @@ package com.example.ui.editor
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,13 +70,16 @@ fun Viewport3D(
                     }
                 }
                 .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        // Smooth orbit with instant Canvas invalidation
-                        viewModel.orbitCamera(
-                            deltaYaw = dragAmount.x * 0.4f,
-                            deltaPitch = -dragAmount.y * 0.4f
-                        )
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        if (zoom != 1.0f) {
+                            viewModel.zoomCamera((1.0f - zoom) * 8f)
+                        }
+                        if (pan != Offset.Zero) {
+                            viewModel.orbitCamera(
+                                deltaYaw = pan.x * 0.45f,
+                                deltaPitch = -pan.y * 0.45f
+                            )
+                        }
                     }
                 }
         ) {

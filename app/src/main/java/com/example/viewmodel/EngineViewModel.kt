@@ -322,9 +322,12 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     fun updateRenderStats(stats: RenderStats) {
         val now = System.currentTimeMillis()
-        if (now - lastStatsUpdateTime >= 500L) {
+        if (now - lastStatsUpdateTime >= 1000L) {
             lastStatsUpdateTime = now
-            _renderStats.value = stats
+            if (_renderStats.value.trianglesDrawn != stats.trianglesDrawn ||
+                _renderStats.value.drawCalls != stats.drawCalls) {
+                _renderStats.value = stats
+            }
         }
     }
 

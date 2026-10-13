@@ -456,35 +456,45 @@ fun LandscapeStudioScreen(
                                 )
                             }
 
-                            ScrollableTabRow(
-                                selectedTabIndex = selectedRightTab,
-                                containerColor = Color.Transparent,
-                                contentColor = Color(0xFF00E5FF),
-                                edgePadding = 2.dp,
-                                modifier = Modifier.weight(1f).height(32.dp)
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(30.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 rightTabs.forEachIndexed { idx, (icon, title) ->
-                                    Tab(
-                                        selected = selectedRightTab == idx,
-                                        onClick = { selectedRightTab = idx },
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = icon,
-                                                    contentDescription = title,
-                                                    modifier = Modifier.size(13.dp),
-                                                    tint = if (selectedRightTab == idx) Color(0xFF00E5FF) else Color(0xFF8B949E)
-                                                )
-                                                Spacer(Modifier.width(3.dp))
-                                                Text(
-                                                    text = title,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = if (selectedRightTab == idx) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (selectedRightTab == idx) Color(0xFF00E5FF) else Color(0xFF8B949E)
-                                                )
-                                            }
+                                    val isSelected = selectedRightTab == idx
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(if (isSelected) Color(0xFF263345) else Color.Transparent)
+                                            .clickable { selectedRightTab = idx }
+                                            .padding(horizontal = 2.dp, vertical = 2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = title,
+                                                modifier = Modifier.size(13.dp),
+                                                tint = if (isSelected) Color(0xFF00E5FF) else Color(0xFF8B949E)
+                                            )
+                                            Text(
+                                                text = title,
+                                                fontSize = 8.5.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) Color(0xFF00E5FF) else Color(0xFF8B949E),
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
                                         }
-                                    )
+                                    }
                                 }
                             }
                         }

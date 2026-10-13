@@ -1,75 +1,98 @@
-# Godot 4 Mobile UI Refinement & Density Optimization Plan
+# Rencana Optimasi Performa 3D Viewport & Redesain UI File Manager
 
-Perapihan menyeluruh antarmuka Vortex3D Mobile Engine sesuai preferensi pengguna: merampingkan kontainer tombol dan toolbar utama menjadi kompak (tinggi 32dp-36dp), merapatkan padding panel dock (6dp-8dp) demi memaksimalkan ruang kerja viewport 3D, serta menghadirkan desain kartu proyek yang modern dengan border tipis dan tombol aksi ringkas di Project Hub.
+Solusi menyeluruh untuk mengatasi keluhan lag/lambat pada render 3D viewport, memperluas area pemilihan file dengan Dialog Pop-up Layar Penuh (menghilangkan kendala celah pemilihan yang sempit), serta merapikan header tab dock kiri dan kanan dengan ikon ringkas tanpa teks terpotong.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Hasil konfirmasi preferensi UI dari pengguna:
-> - **Toolbar & Tombol Editor**: Dibuat kompak dan minimalis ala Godot 4 mobile (tinggi tombol/toolbar 32dp - 36dp), menghilangkan kesan kontainer yang terlalu besar/bulky.
-> - **Padding & Spacing Panel Dock**: Diperapat ke rentang 6dp - 8dp pada Scene Tree, Inspector, dan Asset Manager agar area kerja 3D Viewport jauh lebih lega dan maksimal.
-> - **Project Hub Cards**: Desain kartu proyek menggunakan border tipis (`1.dp`), sudut melingkar proporsional (`10.dp`), dan tombol aksi ringkas di sebelah kanan.
+> Keputusan yang dikonfirmasi oleh pengguna:
+> - **File Manager / Pemilihan File**: Menghadirkan **Dialog Pop-up Layar Penuh** khusus untuk penjelajahan dan pemilihan file (.glb, .obj, .lua, audio, shaders) dengan layout kartu yang lega, preview jelas, dan tombol aksi yang nyaman disentuh.
+> - **Optimasi Performa**: Memprioritaskan **Render 3D Viewport dan Respon Sentuhan Orbit Kamera** dengan mengeliminasi alokasi objek per-frame (zero-allocation rendering buffer), mengurangi recomposition berlebih saat dragging, serta memperhalus render loop.
+> - **Penataan Tab Dock**: Menggunakan **Tab Ikon Ringkas Berlebar Fleksibel** pada dock kiri dan kanan, mencegah teks terpotong dan menjaga tampilan tetap rapi serta simetris.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **Apa yang Diperbaiki**: Kepadatan elemen UI (*UI Density*) di seluruh layar editor (`LandscapeStudioScreen`, `MainStudioScreen`, `ProjectHubScreen`, dan view dock terkait) agar terasa seperti software desktop profesional (Godot Engine 4) di perangkat mobile.
-- **Nilai Utama**: Ruang pandang 3D yang lebih luas, navigasi tombol yang tidak memakan tempat berlebih, serta konsistensi estetika gelap profesional (`#0D1117`, `#161B24`, aksen `#478CBF` dan `#00E5FF`).
+- **Tujuan**: Mengubah pengalaman editor mobile Vortex3D menjadi responsif (60 FPS stabil tanpa stuttering saat orbit kamera) dan nyaman digunakan untuk manipulasi file serta navigasi tab.
+- **Masalah Pengguna Saat Ini**:
+  1. Area daftar file pada tab file manager dock terlalu sempit dan terhimpit oleh search bar & tombol preset, menyulitkan pengguna menyentuh file yang diinginkan.
+  2. Perputaran kamera 3D terasa berat dan lambat akibat alokasi memori ribuan objek per detik dalam loop Canvas rendering.
+  3. Label pada tab dock kanan dan tombol aksi asset manager mengalami pemotongan teks akibat lebar kontainer dock yang terbatas.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-### 1. Project Hub (Lobby) UI Refinement
-- **Kartu Proyek (`ProjectCard`)**:
-  - Tinggi card dan padding internal dirampingkan menjadi compact (`10.dp` padding).
-  - Thumbnail box diperkecil menjadi `44.dp x 44.dp`.
-  - Tombol aksi (Play, Edit, Duplicate, Delete) menggunakan ukuran icon kecil dan button compact (`height = 32.dp`).
-  - Badge orientasi dan status aktif didesain rapi berdampingan dengan jumlah nodes dan tanggal modifikasi.
+### 1. Dialog Pemilihan File Layar Penuh (Full-Screen File Picker Modal)
+- **Akses Langsung**: Tombol mencolok *"Buka File Manager Layar Penuh"* pada dock kiri dan header Asset Manager.
+- **Header Modal**:
+  - Tombol Kembali / Navigasi Folder Induk yang jelas (`40dp` touch target).
+  - Breadcrumb path aktif (contoh: `/storage/emulated/0/Download`).
+  - Bar pencarian terintegrasi dengan aksi clear filter.
+  - Tombol Tutup dialog yang mudah diakses.
+- **Area Daftar File Luas & Nyaman**:
+  - Tampilan kartu file modern dengan tinggi nyaman (`64dp`), ikon format berwarna (GLB: Cyan, LUA: Kuning, Audio: Oranye, Shaders: Hijau).
+  - Informasi ukuran file dan tanggal modifikasi yang terbaca jelas.
+  - Tombol aksi instan: *"Spawn ke Scene"*, *"Impor ke Assets"*, dan *"Buka Editor"*.
 
-### 2. Editor Toolbar & Top Bar (Landscape & Portrait Studio)
-- **Top Bar**:
-  - Tinggi top bar diperkecil dengan padding horizontal/vertikal minimalis.
-  - Tombol-tombol aksi utama (Simulation Play/Pause, Reset, Wireframe, Fullscreen) menggunakan ukuran icon compact (`18.dp - 20.dp`) di dalam kontainer `32.dp`.
-- **Panel Dock (Kiri, Kanan, Bawah)**:
-  - Spacing antar item list dan tree nodes dirapatkan ke `6.dp` - `8dp`.
-  - Tab header di dock menggunakan font `11.sp` dan padding tipis.
+### 2. Tab Ikon Ringkas Dock Kiri & Kanan (Anti Teks Terpotong)
+- **Left Dock Tabs (Scene, Assets, Files)**:
+  - Tab ringkas dengan ikon proporsional (`18dp`) dan label fleksibel auto-fit.
+  - Perbaikan tombol `+ Impor .GLB` pada header Asset Manager agar tidak terpotong (menggunakan ikon tambah ringkas dan teks fleksibel).
+- **Right Dock Tabs (Inspector, Lua, Shaders, AI Fix, Docs)**:
+  - Tab bergaya compact pill indicator dengan ikon representatif dan label ringkas tanpa min-width berlebih, sehingga seluruh tab muat rapi tanpa terpotong.
+
+### 3. Responsivitas 3D Viewport & Gesture Orbit
+- **Zero-Allocation Render Pipeline**:
+  - Pre-alokasi static buffer untuk proyeksi verteks dan segitiga di `EngineRenderer.kt` guna menghindari garbage collection freeze saat mengorbit kamera.
+  - Throttling dan penyatuan state pembaruan kamera untuk mencegah recomposition Compose yang tidak perlu pada overlay UI.
+  - Respon sentuhan drag orbit yang instan, mulus, dan presisi.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Compact Touch Targets (Godot 4 Mobile Ergonomics)**:
-  - *Pendekatan*: Menyesuaikan tinggi tombol toolbar dan item list menjadi 32dp–36dp, mempertahankan kenyamanan sentuh mobile namun menghilangkan kesan "terlalu besar/boros tempat".
-- **Density Optimization**:
-  - *Pendekatan*: Mengurangi padding yang berlebihan di sekeliling card dan tab, memberikan ekstra ruang bagi canvas 3D Viewport.
+- **Full-Screen Dialog vs Narrow Dock File List**:
+  - *Pendekatan*: Menampilkan dialog modal layar penuh ketika pengguna ingin memilih atau mengimpor file. Dock kiri tetap memiliki pratinjau cepat, namun aksi pemilihan utama dilakukan di layar penuh dengan ruang sentuh maksimal.
+  - *Alasan*: Layar mobile landscape memiliki keterbatasan tinggi vertikal pada dock samping. Layar penuh memberikan 100% ruang pandang untuk melihat nama file panjang dan detail metadata.
+- **Reusable Primitive Buffers vs Per-Frame Object Instantiation**:
+  - *Pendekatan*: Menggunakan array primitif reusable (`FloatArray`) untuk transformasi 3D dan proyeksi layar alih-alih membuat ribuan objek data class per frame.
+  - *Alasan*: Mengeliminasi pemicu GC (Garbage Collection) Android yang menjadi penyebab utama keluhan "masih sangat lambat".
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+## 4. Technical Architecture & Component Flow
 
 ```
-┌────────────────────────────────────────────────────────┐
-│                   LandscapeStudioScreen                │
-│    (Compact 32-36dp Top Bar & Tight Dock Padding 6-8dp)│
-└───────────────▲────────────────────────▲───────────────┘
-                │                        │
-       Rapat & Kompak           Lebih Luas untuk 3D
-                │                        │
-┌───────────────┴────────┐      ┌────────▼───────────────┐
-│     ProjectHubScreen   │      │       Viewport3D       │
-│ (Modern Thin-Bordered  │      │ (Full screen view with │
-│     Project Cards)     │      │   compact overlay HUD) │
-└────────────────────────┘      └────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                    LandscapeStudioScreen                      │
+│   ┌─────────────────────┬───────────────────────┬──────────┐  │
+│   │   Left Dock         │      Viewport3D       │Right Dock│  │
+│   │ [Scene|Assets|Files]│  (Zero-GC 3D Orbit)   │[Insp|Lua]│  │
+│   │                     │                       │          │  │
+│   │  Quick Asset Hub    │  Fast Touch Response  │Inspector │  │
+│   └──────────┬──────────┴───────────────────────┴──────────┘  │
+│              │                                                │
+│              ▼ Klik "Pilih File"                              │
+│   ┌────────────────────────────────────────────────────────┐  │
+│   │        FullScreenFilePickerDialog (Layar Penuh)        │  │
+│   │  • Breadcrumb Path & Search Bar Nyaman                 │  │
+│   │  • List Card Luas (Touch target 64dp, no squishing)    │  │
+│   │  • Aksi Langsung: Spawn 3D / Import Asset / Edit       │  │
+│   └────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-### Rincian Perubahan Kode:
-1. **`ProjectHubScreen.kt`**:
-   - Merampingkan padding dan ukuran elemen pada `ProjectCard` dan template cards agar lebih ringkas dan modern.
-2. **`LandscapeStudioScreen.kt` & `MainActivity.kt` (`MainStudioScreen`)**:
-   - Memperkecil tinggi Top Bar dan kontainer tombol aksi/toolbar menjadi kompak (32dp - 36dp).
-3. **`HierarchyView.kt`, `InspectorView.kt`, `AssetBrowserView.kt`, `FileManagerView.kt`**:
-   - Merapatkan spacing antar baris item menjadi `6.dp` - `8.dp`.
-4. **Verifikasi**:
-   - Jalankan `compile_applet` untuk memastikan seluruh perubahan terkompilasi bersih tanpa error.
+### Rencana Langkah Perubahan Kode:
+1. **`FullScreenFilePickerDialog.kt` & `FileManagerView.kt`**:
+   - Membuat komponen dialog layar penuh khusus untuk penjelajahan dan pemilihan file dengan touch target lega dan aksi jelas.
+   - Mengintegrasikan dialog ini pada tab Files dan tombol impor Asset Manager.
+2. **`EngineRenderer.kt` & `Viewport3D.kt`**:
+   - Mengganti alokasi per-frame dengan reusable float buffer untuk verteks, normal, dan segitiga terproyeksi.
+   - Mengoptimalkan gesture `pointerInput` drag orbit kamera agar rendering instan tanpa stuttering GC.
+3. **`LandscapeStudioScreen.kt` & `AssetBrowserView.kt`**:
+   - Menata ulang tab header dock kiri dan kanan menjadi tab ikon fleksibel yang tidak memotong teks.
+   - Merapikan header Asset Manager agar tombol impor tidak terdesak.
+4. **Verifikasi & Build**:
+   - Menjalankan `compile_applet` untuk memastikan seluruh komponen terbangun dengan sempurna tanpa error.

@@ -26,17 +26,20 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -80,6 +83,7 @@ fun FileManagerView(
     var newFolderName by remember { mutableStateOf("") }
     var selectedFileForAction by remember { mutableStateOf<FileItem?>(null) }
     var searchQuery by remember { mutableStateOf("") }
+    var showFullScreenPicker by remember { mutableStateOf(false) }
 
     // Android 7-10 permission launcher
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
@@ -109,6 +113,52 @@ fun FileManagerView(
             .background(Color(0xFF0D1117))
             .padding(8.dp)
     ) {
+        // Fullscreen Mode Banner Button (Solves cramped selection space)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 6.dp)
+                .clickable { showFullScreenPicker = true }
+                .testTag("open_fullscreen_picker_banner"),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF172433)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.6f)),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.OpenInFull,
+                    contentDescription = null,
+                    tint = Color(0xFF00E5FF),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Mode Layar Penuh",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF00E5FF)
+                    )
+                    Text(
+                        text = "Pilih file & model 3D di area luas",
+                        fontSize = 10.sp,
+                        color = Color(0xFF8B949E)
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.Fullscreen,
+                    contentDescription = "Expand",
+                    tint = Color(0xFF00E5FF),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
         // Permission Request Banner if not granted
         if (!hasPermission) {
             Card(
@@ -162,18 +212,21 @@ fun FileManagerView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "File Manager (ZArchiver Style)",
+                text = "File Manager",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFFF0F6FC)
             )
 
             Row {
-                IconButton(onClick = { showCreateFolderDialog = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.CreateNewFolder, contentDescription = "Buat Folder", tint = Color(0xFF00E5FF), modifier = Modifier.size(20.dp))
+                IconButton(onClick = { showFullScreenPicker = true }, modifier = Modifier.size(30.dp).testTag("header_fullscreen_button")) {
+                    Icon(Icons.Default.Fullscreen, contentDescription = "Layar Penuh", tint = Color(0xFF00E5FF), modifier = Modifier.size(19.dp))
                 }
-                IconButton(onClick = { refreshFiles() }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Muat Ulang", tint = Color.White, modifier = Modifier.size(20.dp))
+                IconButton(onClick = { showCreateFolderDialog = true }, modifier = Modifier.size(30.dp)) {
+                    Icon(Icons.Default.CreateNewFolder, contentDescription = "Buat Folder", tint = Color(0xFF00E5FF), modifier = Modifier.size(18.dp))
+                }
+                IconButton(onClick = { refreshFiles() }, modifier = Modifier.size(30.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Muat Ulang", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }
@@ -326,7 +379,7 @@ fun FileManagerView(
                             "glb" -> Icons.Default.ViewInAr
                             "lua" -> Icons.Default.Code
                             "glsl" -> Icons.Default.ColorLens
-                            else -> Icons.Default.InsertDriveFile
+                            else -> Icons.AutoMirrored.Filled.InsertDriveFile
                         },
                         contentDescription = null,
                         tint = when (fileItem.extension) {
@@ -409,6 +462,18 @@ fun FileManagerView(
             }
         )
     }
+
+    // Full Screen File Picker Dialog Modal
+    if (showFullScreenPicker) {
+        FullScreenFilePickerDialog(
+            viewModel = viewModel,
+            initialDirectory = currentDir,
+            onDismiss = {
+                showFullScreenPicker = false
+                refreshFiles()
+            }
+        )
+    }
 }
 
 @Composable
@@ -424,12 +489,16 @@ private fun FileRow(
         colors = CardDefaults.cardColors(
             containerColor = if (item.isDirectory) Color(0xFF161B22) else Color(0xFF0F141C)
         ),
-        shape = RoundedCornerShape(6.dp)
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = if (item.isDirectory) Color(0xFF263040) else Color(0xFF1B2230)
+        ),
+        shape = RoundedCornerShape(8.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -438,7 +507,7 @@ private fun FileRow(
                     item.extension == "glb" -> Icons.Default.ViewInAr
                     item.extension == "lua" -> Icons.Default.Code
                     item.extension == "glsl" -> Icons.Default.ColorLens
-                    else -> Icons.Default.InsertDriveFile
+                    else -> Icons.AutoMirrored.Filled.InsertDriveFile
                 },
                 contentDescription = null,
                 tint = when {
@@ -448,10 +517,10 @@ private fun FileRow(
                     item.extension == "glsl" -> Color(0xFFFF4081)
                     else -> Color(0xFF8B949E)
                 },
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(24.dp)
             )
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -461,6 +530,7 @@ private fun FileRow(
                     color = if (item.isDirectory) Color(0xFFF0F6FC) else Color(0xFFC9D1D9),
                     maxLines = 1
                 )
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = "${item.sizeString} • ${item.dateString}",
                     fontSize = 10.sp,
@@ -476,7 +546,16 @@ private fun FileRow(
                     color = Color(0xFF00E5FF),
                     modifier = Modifier
                         .background(Color(0xFF00E5FF).copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                )
+            } else if (item.isDirectory) {
+                Text(
+                    text = "Buka",
+                    fontSize = 10.sp,
+                    color = Color(0xFFFFB300),
+                    modifier = Modifier
+                        .background(Color(0xFFFFB300).copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
                 )
             }
         }
