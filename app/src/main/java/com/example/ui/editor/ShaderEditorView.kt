@@ -68,7 +68,7 @@ fun ShaderEditorView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0D1117))
-            .padding(12.dp)
+            .padding(8.dp)
     ) {
         // Header
         Row(
@@ -79,9 +79,10 @@ fun ShaderEditorView(
             Box {
                 OutlinedButton(
                     onClick = { shaderDropdownExpanded = true },
-                    modifier = Modifier.testTag("select_shader_dropdown")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(30.dp).testTag("select_shader_dropdown")
                 ) {
-                    Text(shader.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(shader.name, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
 
                 DropdownMenu(
@@ -90,7 +91,7 @@ fun ShaderEditorView(
                 ) {
                     allShaders.forEach { item ->
                         DropdownMenuItem(
-                            text = { Text(item.name) },
+                            text = { Text(item.name, fontSize = 12.sp) },
                             onClick = {
                                 viewModel.editShader(item)
                                 shaderDropdownExpanded = false
@@ -100,7 +101,7 @@ fun ShaderEditorView(
                 }
             }
 
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(
                     onClick = {
                         viewModel.askAiCopilot(
@@ -109,10 +110,11 @@ fun ShaderEditorView(
                         )
                         viewModel.setWorkspaceTab(WorkspaceTab.AI_COPILOT)
                     },
-                    modifier = Modifier.testTag("ai_shader_button")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(30.dp).testTag("ai_shader_button")
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
                     Text("AI GLSL", fontSize = 11.sp, color = Color(0xFF00E5FF))
                 }
 
@@ -127,32 +129,33 @@ fun ShaderEditorView(
                             )
                         )
                     },
-                    modifier = Modifier.testTag("save_shader_button")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(30.dp).testTag("save_shader_button")
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Apply", fontSize = 11.sp)
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Apply", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
-        // Tabs
+        // Tabs (Sleek 32dp)
         TabRow(
             selectedTabIndex = activeTab,
             containerColor = Color(0xFF161B22),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(32.dp)
         ) {
             Tab(
                 selected = activeTab == 0,
                 onClick = { activeTab = 0 },
-                text = { Text("Vertex Shader (GLSL)", fontSize = 12.sp) }
+                text = { Text("Vertex Shader (GLSL)", fontSize = 11.sp) }
             )
             Tab(
                 selected = activeTab == 1,
                 onClick = { activeTab = 1 },
-                text = { Text("Fragment Shader (GLSL)", fontSize = 12.sp) }
+                text = { Text("Fragment Shader (GLSL)", fontSize = 11.sp) }
             )
         }
 

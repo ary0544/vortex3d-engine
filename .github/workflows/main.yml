@@ -173,18 +173,18 @@ jobs:
             echo "GRADLE_BIN=gradle" >> $GITHUB_ENV
           fi
 
-      - name: 7. Compile Release APK (Universal untuk Semua Arsitektur Perangkat)
+      - name: 7. Compile Release APK (Strictly ARM64 64-bit)
         run: |
           $GRADLE_BIN assembleRelease \
             --no-daemon \
             --stacktrace
 
-      - name: 8. Page-Alignment & Penandatanganan Resmi (V1 + V2 + V3 Signature)
+      - name: 8. Page-Alignment, Signature (V1+V2+V3) & Strict 64-bit Validation
         run: |
           echo "Mencari file APK..."
-          RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*universal*" | grep -i "release" | head -n 1)
+          RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" | grep -i "release" | head -n 1)
           if [ -z "$RAW_APK" ]; then
-            RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*universal*" | head -n 1)
+            RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" | head -n 1)
           fi
 
           if [ -z "$RAW_APK" ]; then
@@ -194,15 +194,11 @@ jobs:
 
           echo "APK Terpilih: $RAW_APK"
 
-          # 1. Zipalign APK dengan 4KB (-p) page-align untuk library .so
-          # CRITICAL: Bendera -p wajib ada agar library C++/native ter-align 4096-byte (page boundary).
-          # Tanpa -p, sistem Android Package Manager akan menolak instalasi dengan error INVALID_APK.
+          # 1. Zipalign APK dengan 4KB (-p) page-align
           zipalign -f -p 4 "$RAW_APK" aligned.apk
-
-          # Verifikasi alignment sebelum ditandatangani
           zipalign -c -p 4 aligned.apk && echo "Zipalign 4KB page-alignment sukses terverifikasi!"
 
-          # 2. Tandatangani secara penuh dengan Skema V1 (JAR), V2 (Full APK), dan V3
+          # 2. Tandatangani secara penuh dengan Skema V1, V2, V3
           apksigner sign \
             --ks "$SIGNING_KEYSTORE" \
             --ks-pass pass:"$SIGNING_PASS" \
@@ -212,20 +208,31 @@ jobs:
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --v4-signing-enabled false \
-            --out app-universal-release.apk \
+            --out app-arm64-release.apk \
             aligned.apk
 
-          # 3. Verifikasi tanda tangan secara detail (-v)
-          echo "Hasil Verifikasi Signature:"
-          apksigner verify -v --print-certs app-universal-release.apk
+          # 3. Validasi ketat arsitektur 64-bit (ARM64 Only)
+          echo "Memeriksa isi arsitektur native .so dalam APK..."
+          SO_FILES=$(unzip -l app-arm64-release.apk | grep "\.so$" || true)
+          echo "$SO_FILES"
 
-          echo "Ukuran APK Final:"
-          ls -lh app-universal-release.apk
+          if echo "$SO_FILES" | grep -q "armeabi-v7a\|x86\|x86_64"; then
+            echo "ERROR: Ditemukan library 32-bit atau x86 di dalam APK! Aplikasi wajib 100% ARM64 64-bit."
+            exit 1
+          else
+            echo "SUKSES: APK terverifikasi bersih dan hanya mengandung arsitektur arm64-v8a (64-bit)!"
+          fi
 
-      - name: 9. Unggah Artefak APK Siap Pasang
+          # 4. Verifikasi tanda tangan secara detail (-v)
+          apksigner verify -v --print-certs app-arm64-release.apk
+
+          echo "Ukuran APK Final (ARM64 Only):"
+          ls -lh app-arm64-release.apk
+
+      - name: 9. Unggah Artefak APK ARM64 64-bit
         uses: actions/upload-artifact@v4
         with:
-          name: app-universal-release
-          path: app-universal-release.apk
+          name: app-arm64-release
+          path: app-arm64-release.apk
           if-no-files-found: error
           overwrite: true

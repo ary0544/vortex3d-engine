@@ -50,7 +50,7 @@ fun Viewport3D(
     val selectedId by viewModel.selectedEntityId.collectAsState()
     val isSimulating by viewModel.isSimulating.collectAsState()
     val isWireframe by viewModel.isWireframeMode.collectAsState()
-    val stats by viewModel.renderStats.collectAsState()
+    val cameraRev by viewModel.cameraRevision.collectAsState()
 
     var touchOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -72,116 +72,98 @@ fun Viewport3D(
                 .pointerInput(Unit) {
                     detectDragGestures { change, dragAmount ->
                         change.consume()
-                        // 1-finger orbit
-                        viewModel.camera.orbit(
+                        // Smooth orbit with instant Canvas invalidation
+                        viewModel.orbitCamera(
                             deltaYaw = dragAmount.x * 0.4f,
                             deltaPitch = -dragAmount.y * 0.4f
                         )
                     }
                 }
         ) {
-            val renderStats = EngineRenderer.renderScene(
-                drawScope = this,
-                scene = scene,
-                camera = viewModel.camera,
-                assets = viewModel.assetManager,
-                selectedEntityId = selectedId,
-                timeSeconds = viewModel.elapsedTimeSeconds,
-                renderWireframeOnly = isWireframe
-            )
-            viewModel.updateRenderStats(renderStats)
+            // Read cameraRev to trigger redraw on camera change
+            if (cameraRev >= 0) {
+                val renderStats = EngineRenderer.renderScene(
+                    drawScope = this,
+                    scene = scene,
+                    camera = viewModel.camera,
+                    assets = viewModel.assetManager,
+                    selectedEntityId = selectedId,
+                    timeSeconds = viewModel.elapsedTimeSeconds,
+                    renderWireframeOnly = isWireframe
+                )
+                viewModel.updateRenderStats(renderStats)
+            }
         }
 
-        // Viewport Top Control HUD
+        // Compact Viewport Top Control HUD (Godot 4 Mobile Style)
         Card(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(8.dp)
+                .padding(6.dp)
                 .testTag("viewport_controls_card"),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(8.dp)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = { viewModel.toggleSimulation() },
-                    modifier = Modifier.testTag("toggle_simulation_button")
+                    modifier = Modifier.size(28.dp).testTag("toggle_simulation_button")
                 ) {
                     Icon(
                         imageVector = if (isSimulating) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isSimulating) "Pause Simulation" else "Play Simulation",
-                        tint = if (isSimulating) Color(0xFFFFB300) else Color(0xFF00E676)
+                        tint = if (isSimulating) Color(0xFFFFB300) else Color(0xFF00E676),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
                 IconButton(
                     onClick = { viewModel.resetSimulation() },
-                    modifier = Modifier.testTag("reset_simulation_button")
+                    modifier = Modifier.size(28.dp).testTag("reset_simulation_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = "Reset Simulation",
-                        tint = MaterialTheme.colorScheme.onSurface
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(15.dp)
                     )
                 }
 
                 IconButton(
                     onClick = { viewModel.toggleWireframe() },
-                    modifier = Modifier.testTag("wireframe_button")
+                    modifier = Modifier.size(28.dp).testTag("wireframe_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.GridOn,
                         contentDescription = "Wireframe Toggle",
-                        tint = if (isWireframe) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onSurface
+                        tint = if (isWireframe) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(15.dp)
                     )
                 }
 
                 IconButton(
                     onClick = { viewModel.setPlayMode(true) },
-                    modifier = Modifier.testTag("play_mode_button")
+                    modifier = Modifier.size(28.dp).testTag("play_mode_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Fullscreen,
                         contentDescription = "Enter Game Mode",
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }
         }
 
-        // Viewport Stats Badge
-        Card(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xAA0D1117)),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "${stats.fps} FPS",
-                    color = Color(0xFF00E676),
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Text(
-                    text = "${stats.trianglesDrawn} Tris",
-                    color = Color(0xFF81D4FA),
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Text(
-                    text = "${scene.entities.size} Ents",
-                    color = Color(0xFFFFCC80),
-                    fontSize = 11.sp
-                )
-            }
-        }
+        // Isolated Viewport Stats Badge
+        RenderStatsBadge(
+            viewModel = viewModel,
+            entityCount = scene.entities.size,
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
 
         // Camera Orbit / Zoom Hint on Bottom
         Text(
@@ -192,5 +174,42 @@ fun Viewport3D(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 6.dp)
         )
+    }
+}
+
+@Composable
+fun RenderStatsBadge(
+    viewModel: EngineViewModel,
+    entityCount: Int,
+    modifier: Modifier = Modifier
+) {
+    val stats by viewModel.renderStats.collectAsState()
+    Card(
+        modifier = modifier.padding(8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xAA0D1117)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${stats.fps} FPS",
+                color = Color(0xFF00E676),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text(
+                text = "${stats.trianglesDrawn} Tris",
+                color = Color(0xFF81D4FA),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Text(
+                text = "$entityCount Ents",
+                color = Color(0xFFFFCC80),
+                fontSize = 11.sp
+            )
+        }
     }
 }

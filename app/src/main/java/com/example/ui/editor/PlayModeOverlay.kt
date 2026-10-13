@@ -60,7 +60,7 @@ fun PlayModeOverlay(
 ) {
     val scene by viewModel.scene.collectAsState()
     val isWireframe by viewModel.isWireframeMode.collectAsState()
-    val stats by viewModel.renderStats.collectAsState()
+    val cameraRev by viewModel.cameraRevision.collectAsState()
 
     var stickOffset by remember { mutableStateOf(Offset.Zero) }
     val maxStickRadius = 60f
@@ -76,7 +76,7 @@ fun PlayModeOverlay(
                         change.consume()
                         // Right screen camera drag
                         if (change.position.x > size.width * 0.4f) {
-                            viewModel.camera.orbit(
+                            viewModel.orbitCamera(
                                 deltaYaw = dragAmount.x * 0.4f,
                                 deltaPitch = -dragAmount.y * 0.4f
                             )
@@ -84,16 +84,18 @@ fun PlayModeOverlay(
                     }
                 }
         ) {
-            val renderStats = EngineRenderer.renderScene(
-                drawScope = this,
-                scene = scene,
-                camera = viewModel.camera,
-                assets = viewModel.assetManager,
-                selectedEntityId = null,
-                timeSeconds = viewModel.elapsedTimeSeconds,
-                renderWireframeOnly = isWireframe
-            )
-            viewModel.updateRenderStats(renderStats)
+            if (cameraRev >= 0) {
+                val renderStats = EngineRenderer.renderScene(
+                    drawScope = this,
+                    scene = scene,
+                    camera = viewModel.camera,
+                    assets = viewModel.assetManager,
+                    selectedEntityId = null,
+                    timeSeconds = viewModel.elapsedTimeSeconds,
+                    renderWireframeOnly = isWireframe
+                )
+                viewModel.updateRenderStats(renderStats)
+            }
         }
 
         // Top Status HUD & Exit Button
@@ -104,24 +106,15 @@ fun PlayModeOverlay(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xAA0D1117)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    Text("GAME RUNTIME", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF00E676))
-                    Spacer(Modifier.width(8.dp))
-                    Text("${stats.fps} FPS", fontSize = 11.sp, color = Color.White)
-                }
-            }
+            PlayModeFpsChip(viewModel = viewModel)
 
             Spacer(Modifier.weight(1f))
 
             IconButton(
                 onClick = { viewModel.resetSimulation() },
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Reset Game", tint = Color.White)
+                Icon(Icons.Default.Refresh, contentDescription = "Reset Game", tint = Color.White, modifier = Modifier.size(18.dp))
             }
 
             Spacer(Modifier.width(8.dp))
@@ -129,11 +122,13 @@ fun PlayModeOverlay(
             Button(
                 onClick = { viewModel.setPlayMode(false) },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                modifier = Modifier.testTag("exit_play_mode_button")
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier.height(32.dp).testTag("exit_play_mode_button")
             ) {
-                Icon(Icons.Default.Close, contentDescription = "Exit to Editor", modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.Close, contentDescription = "Exit to Editor", modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Exit Editor", fontSize = 12.sp)
+                Text("Exit Editor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -176,8 +171,8 @@ fun PlayModeOverlay(
             Box(
                 modifier = Modifier
                     .offset { IntOffset(stickOffset.x.toInt(), stickOffset.y.toInt()) }
-                    .size(54.dp)
-                    .background(Color(0xFF00E5FF).copy(alpha = 0.8f), CircleShape)
+                    .size(52.dp)
+                    .background(Color(0xFF00E5FF).copy(alpha = 0.85f), CircleShape)
             )
         }
 
@@ -194,12 +189,13 @@ fun PlayModeOverlay(
                     viewModel.playSound("laser")
                 },
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(52.dp)
                     .testTag("action_fire_button"),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9100)),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                 shape = CircleShape
             ) {
-                Icon(Icons.Default.FlashOn, contentDescription = "Fire Action", tint = Color.White)
+                Icon(Icons.Default.FlashOn, contentDescription = "Fire Action", tint = Color.White, modifier = Modifier.size(24.dp))
             }
 
             Spacer(Modifier.height(12.dp))
@@ -210,13 +206,33 @@ fun PlayModeOverlay(
                     viewModel.playSound("jump")
                 },
                 modifier = Modifier
-                    .size(68.dp)
+                    .size(62.dp)
                     .testTag("action_jump_button"),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                 shape = CircleShape
             ) {
                 Text("JUMP", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.Black)
             }
+        }
+    }
+}
+
+@Composable
+fun PlayModeFpsChip(
+    viewModel: EngineViewModel,
+    modifier: Modifier = Modifier
+) {
+    val stats by viewModel.renderStats.collectAsState()
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = Color(0xAA0D1117)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Text("GAME RUNTIME", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF00E676))
+            Spacer(Modifier.width(8.dp))
+            Text("${stats.fps} FPS", fontSize = 11.sp, color = Color.White)
         }
     }
 }

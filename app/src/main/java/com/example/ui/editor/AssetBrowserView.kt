@@ -59,7 +59,7 @@ fun AssetBrowserView(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(12.dp)
+            .padding(8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -67,39 +67,40 @@ fun AssetBrowserView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Asset Management System",
+                text = "Asset Manager",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
             )
 
             Button(
                 onClick = { viewModel.setWorkspaceTab(com.example.viewmodel.WorkspaceTab.FILE_MANAGER) },
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.testTag("import_glb_file_manager_button")
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                modifier = Modifier.height(30.dp).testTag("import_glb_file_manager_button")
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("Impor .GLB", fontSize = 11.sp)
+                Spacer(Modifier.width(3.dp))
+                Text("Impor .GLB", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
         ScrollableTabRow(
             selectedTabIndex = selectedCategoryIndex,
             edgePadding = 0.dp,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(32.dp)
         ) {
             categories.forEachIndexed { index, title ->
                 Tab(
                     selected = selectedCategoryIndex == index,
                     onClick = { selectedCategoryIndex = index },
-                    text = { Text(title, fontSize = 12.sp) }
+                    text = { Text(title, fontSize = 11.sp) }
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
 
         when (selectedCategoryIndex) {
             0 -> MeshesTab(viewModel)
@@ -123,26 +124,27 @@ private fun MeshesTab(viewModel: EngineViewModel) {
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.ViewInAr, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(10.dp))
+                        Icon(Icons.Default.ViewInAr, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
                         Column {
-                            Text(mesh.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text("${mesh.vertexCount} Verts • ${mesh.triangleCount} Tris", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(mesh.name, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("${mesh.vertexCount} Verts • ${mesh.triangleCount} Tris", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
                     Button(
                         onClick = { viewModel.addPrimitive(mesh.name.lowercase()) },
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Spawn", fontSize = 11.sp)
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(3.dp))
+                        Text("Spawn", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

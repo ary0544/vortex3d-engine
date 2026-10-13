@@ -55,35 +55,36 @@ fun DocumentationView(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(12.dp)
+            .padding(8.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Book, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(8.dp))
+            Icon(Icons.Default.Book, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
             Text(
                 text = "Vortex3D Engine Documentation",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
         ScrollableTabRow(
             selectedTabIndex = selectedSection,
             edgePadding = 0.dp,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(32.dp)
         ) {
             sections.forEachIndexed { index, name ->
                 Tab(
                     selected = selectedSection == index,
                     onClick = { selectedSection = index },
-                    text = { Text(name, fontSize = 12.sp) }
+                    text = { Text(name, fontSize = 11.sp) }
                 )
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
 
         Column(
             modifier = Modifier

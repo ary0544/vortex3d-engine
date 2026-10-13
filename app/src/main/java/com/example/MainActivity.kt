@@ -84,6 +84,13 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.EngineViewModel
 import com.example.viewmodel.WorkspaceTab
 
+import android.content.pm.ActivityInfo
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.runtime.LaunchedEffect
+import com.example.viewmodel.ProjectOrientation
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,16 +101,40 @@ class MainActivity : ComponentActivity() {
                 val isPlayMode by viewModel.isPlayMode.collectAsState()
                 val isInLobby by viewModel.isInLobby.collectAsState()
                 val activeTab by viewModel.workspaceTab.collectAsState()
+                val projects by viewModel.projects.collectAsState()
+                val activeProjectId by viewModel.activeProjectId.collectAsState()
+                val activeProject = projects.find { it.id == activeProjectId }
+                val projectOrientation = activeProject?.orientation ?: ProjectOrientation.LANDSCAPE
+
                 val configuration = LocalConfiguration.current
                 val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-                BackHandler(enabled = isPlayMode || isInLobby || (!isLandscape && activeTab != WorkspaceTab.SCENE_VIEW)) {
+                // Dynamically manage screen orientation and system navigation bar visibility
+                LaunchedEffect(isInLobby, projectOrientation) {
+                    val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+                    insetsController.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+                    if (isInLobby) {
+                        // Lobby screen is fixed Portrait with visible navigation bar
+                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        insetsController.show(WindowInsetsCompat.Type.systemBars())
+                    } else {
+                        // Inside project: orientation based on project settings, hide navigation buttons
+                        requestedOrientation = when (projectOrientation) {
+                            ProjectOrientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            ProjectOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                            ProjectOrientation.AUTO_SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                        }
+                        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                    }
+                }
+
+                BackHandler(enabled = isPlayMode || !isInLobby) {
                     if (isPlayMode) {
                         viewModel.setPlayMode(false)
-                    } else if (isInLobby) {
-                        viewModel.setInLobby(false)
-                    } else if (activeTab != WorkspaceTab.SCENE_VIEW) {
-                        viewModel.setWorkspaceTab(WorkspaceTab.SCENE_VIEW)
+                    } else if (!isInLobby) {
+                        viewModel.setInLobby(true)
                     }
                 }
 
@@ -205,48 +236,52 @@ fun MainStudioScreen(
                     // Play Simulation Toggle
                     IconButton(
                         onClick = { viewModel.toggleSimulation() },
-                        modifier = Modifier.testTag("appbar_sim_button")
+                        modifier = Modifier.size(32.dp).testTag("appbar_sim_button")
                     ) {
                         Icon(
                             imageVector = if (isSimulating) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = "Toggle Simulation",
-                            tint = if (isSimulating) Color(0xFFFFB300) else Color(0xFF00E676)
+                            tint = if (isSimulating) Color(0xFFFFB300) else Color(0xFF00E676),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
                     // Reset Simulation
                     IconButton(
                         onClick = { viewModel.resetSimulation() },
-                        modifier = Modifier.testTag("appbar_reset_button")
+                        modifier = Modifier.size(32.dp).testTag("appbar_reset_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Reset",
-                            tint = Color.White
+                            tint = Color.White,
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
                     // Wireframe Toggle
                     IconButton(
                         onClick = { viewModel.toggleWireframe() },
-                        modifier = Modifier.testTag("appbar_wireframe_button")
+                        modifier = Modifier.size(32.dp).testTag("appbar_wireframe_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.GridOn,
                             contentDescription = "Wireframe",
-                            tint = if (isWireframe) Color(0xFF00E5FF) else Color(0xFF8B949E)
+                            tint = if (isWireframe) Color(0xFF00E5FF) else Color(0xFF8B949E),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
                     // Fullscreen Game Play Mode Button
                     IconButton(
                         onClick = { viewModel.setPlayMode(true) },
-                        modifier = Modifier.testTag("appbar_play_game_button")
+                        modifier = Modifier.size(32.dp).testTag("appbar_play_game_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Fullscreen,
                             contentDescription = "Play Game",
-                            tint = Color(0xFF00E5FF)
+                            tint = Color(0xFF00E5FF),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 },
@@ -262,14 +297,17 @@ fun MainStudioScreen(
                 .padding(innerPadding)
                 .background(Color(0xFF0D1117))
         ) {
-            // Workspace Navigation Tabs
+            // Workspace Navigation Tabs (Sleek 34dp)
             val selectedIndex = tabs.indexOfFirst { it.tab == activeTab }.coerceAtLeast(0)
             ScrollableTabRow(
                 selectedTabIndex = selectedIndex,
-                edgePadding = 8.dp,
+                edgePadding = 6.dp,
                 containerColor = Color(0xFF161B22),
                 contentColor = Color(0xFF00E5FF),
-                modifier = Modifier.fillMaxWidth().testTag("workspace_tab_row")
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .testTag("workspace_tab_row")
             ) {
                 tabs.forEachIndexed { index, item ->
                     Tab(
@@ -281,13 +319,13 @@ fun MainStudioScreen(
                                 Icon(
                                     imageVector = item.icon,
                                     contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
+                                    modifier = Modifier.size(14.dp),
                                     tint = if (selectedIndex == index) Color(0xFF00E5FF) else Color(0xFF8B949E)
                                 )
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(4.dp))
                                 Text(
                                     text = item.title,
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = if (selectedIndex == index) FontWeight.Bold else FontWeight.Normal,
                                     color = if (selectedIndex == index) Color(0xFF00E5FF) else Color(0xFF8B949E)
                                 )
@@ -316,8 +354,12 @@ fun MainStudioScreen(
                 }
             }
 
-            // Bottom Console Drawer
-            ConsoleLogView(viewModel = viewModel)
+            // Bottom Console Drawer (Collapsible)
+            ConsoleLogView(
+                viewModel = viewModel,
+                isExpanded = isConsoleExpanded,
+                onToggleExpand = { isConsoleExpanded = !isConsoleExpanded }
+            )
         }
     }
 }

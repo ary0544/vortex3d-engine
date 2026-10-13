@@ -69,7 +69,7 @@ fun AiPromptView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0D1117))
-            .padding(12.dp)
+            .padding(8.dp)
             .verticalScroll(rememberScrollState())
     ) {
         // Header
@@ -214,7 +214,11 @@ fun AiPromptView(
                     }
                 },
                 enabled = !isAiLoading && promptInput.isNotBlank(),
-                modifier = Modifier.testTag("send_ai_prompt_button")
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier
+                    .height(36.dp)
+                    .testTag("send_ai_prompt_button")
             ) {
                 if (isAiLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)

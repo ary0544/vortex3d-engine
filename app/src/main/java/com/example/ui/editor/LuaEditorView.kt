@@ -65,7 +65,7 @@ fun LuaEditorView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0F141C))
-            .padding(12.dp)
+            .padding(8.dp)
     ) {
         // Top Action Bar
         Row(
@@ -76,9 +76,10 @@ fun LuaEditorView(
             Box {
                 OutlinedButton(
                     onClick = { scriptDropdownExpanded = true },
-                    modifier = Modifier.testTag("select_script_dropdown")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(30.dp).testTag("select_script_dropdown")
                 ) {
-                    Text(script.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(script.name, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
 
                 DropdownMenu(
@@ -87,7 +88,7 @@ fun LuaEditorView(
                 ) {
                     allScripts.forEach { item ->
                         DropdownMenuItem(
-                            text = { Text(item.name) },
+                            text = { Text(item.name, fontSize = 12.sp) },
                             onClick = {
                                 viewModel.editScript(item)
                                 scriptDropdownExpanded = false
@@ -98,15 +99,16 @@ fun LuaEditorView(
             }
 
             val latestError by viewModel.latestScriptError.collectAsState()
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 if (latestError != null) {
                     Button(
                         onClick = { viewModel.fixCurrentScriptError() },
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252)),
-                        modifier = Modifier.testTag("one_tap_fix_lua_editor_button")
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        modifier = Modifier.height(30.dp).testTag("one_tap_fix_lua_editor_button")
                     ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(3.dp))
                         Text("⚡ Fix Error", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.width(6.dp))
@@ -116,10 +118,11 @@ fun LuaEditorView(
                     onClick = {
                         viewModel.setWorkspaceTab(WorkspaceTab.AI_COPILOT)
                     },
-                    modifier = Modifier.testTag("ai_assist_script_button")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(30.dp).testTag("ai_assist_script_button")
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
                     Text("AI Prompts", fontSize = 11.sp, color = Color(0xFF00E5FF))
                 }
 
@@ -127,11 +130,12 @@ fun LuaEditorView(
 
                 Button(
                     onClick = { viewModel.saveScript(script.id, codeContent) },
-                    modifier = Modifier.testTag("save_script_button")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(30.dp).testTag("save_script_button")
                 ) {
-                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Save", fontSize = 11.sp)
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Save", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

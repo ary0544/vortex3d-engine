@@ -38,6 +38,9 @@ data class ProjectedTriangle(
 
 object EngineRenderer {
 
+    private val reusablePath = Path()
+    private val triangleBuffer = ArrayList<ProjectedTriangle>(512)
+
     fun renderScene(
         drawScope: DrawScope,
         scene: Scene,
@@ -68,7 +71,7 @@ object EngineRenderer {
         var totalTriangles = 0
         var totalVertices = 0
         var drawCalls = 0
-        val triangleBuffer = mutableListOf<ProjectedTriangle>()
+        triangleBuffer.clear()
 
         val lightDir = scene.lightDirection.normalized()
         val eyePos = camera.getEyePosition()
@@ -190,21 +193,18 @@ object EngineRenderer {
         // 4. Sort triangles by depth (Painter's algorithm: farthest first)
         triangleBuffer.sortByDescending { it.avgDepth }
 
-        // 5. Draw sorted triangles
+        // 5. Draw sorted triangles using single reusable path (zero GC pressure)
         for (tri in triangleBuffer) {
-            val path = Path().apply {
-                moveTo(tri.p0.x, tri.p0.y)
-                lineTo(tri.p1.x, tri.p1.y)
-                lineTo(tri.p2.x, tri.p2.y)
-                close()
-            }
+            reusablePath.reset()
+            reusablePath.moveTo(tri.p0.x, tri.p0.y)
+            reusablePath.lineTo(tri.p1.x, tri.p1.y)
+            reusablePath.lineTo(tri.p2.x, tri.p2.y)
+            reusablePath.close()
 
             if (tri.isWireframe) {
-                drawScope.drawPath(path, color = tri.color, style = Stroke(width = 1.5f))
+                drawScope.drawPath(reusablePath, color = tri.color, style = Stroke(width = 1.5f))
             } else {
-                drawScope.drawPath(path, color = tri.color)
-                // Subtle wireframe edge for geometric clarity
-                drawScope.drawPath(path, color = tri.color.copy(alpha = 0.3f), style = Stroke(width = 0.8f))
+                drawScope.drawPath(reusablePath, color = tri.color)
             }
         }
 

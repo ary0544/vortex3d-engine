@@ -65,13 +65,20 @@ enum class BottomDockTab {
     FILES
 }
 
+enum class ProjectOrientation(val title: String, val badge: String) {
+    LANDSCAPE("Landscape (Horizontal)", "Landscape"),
+    PORTRAIT("Portrait (Vertical)", "Portrait"),
+    AUTO_SENSOR("Auto-Sensor (Gyro)", "Sensor")
+}
+
 data class ProjectItem(
     val id: String,
     val name: String,
     val templateName: String,
     val entityCount: Int,
     val lastModified: String,
-    val scene: Scene
+    val scene: Scene,
+    val orientation: ProjectOrientation = ProjectOrientation.LANDSCAPE
 )
 
 object LogIdCounter {
@@ -122,8 +129,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
     private val _bottomDockTab = MutableStateFlow(BottomDockTab.CONSOLE)
     val bottomDockTab: StateFlow<BottomDockTab> = _bottomDockTab.asStateFlow()
 
-    // Project Manager / Lobby state
-    private val _isInLobby = MutableStateFlow(false)
+    // Project Manager / Lobby state - defaults to true so Lobby is the main launch screen
+    private val _isInLobby = MutableStateFlow(true)
     val isInLobby: StateFlow<Boolean> = _isInLobby.asStateFlow()
 
     private val _activeProjectId = MutableStateFlow("proj_playground")
@@ -136,7 +143,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
             templateName = "Physics Sandbox",
             entityCount = 6,
             lastModified = "Just now",
-            scene = Scene.createDefaultPhysicsPlayground()
+            scene = Scene.createDefaultPhysicsPlayground(),
+            orientation = ProjectOrientation.LANDSCAPE
         ),
         ProjectItem(
             id = "proj_fps_arena",
@@ -144,7 +152,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
             templateName = "FPS Action Arena",
             entityCount = 6,
             lastModified = "Today",
-            scene = Scene.createFpsArena()
+            scene = Scene.createFpsArena(),
+            orientation = ProjectOrientation.LANDSCAPE
         ),
         ProjectItem(
             id = "proj_cyberpunk",
@@ -152,7 +161,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
             templateName = "Cyberpunk Neo World",
             entityCount = 5,
             lastModified = "Yesterday",
-            scene = Scene.createCyberpunkGlow()
+            scene = Scene.createCyberpunkGlow(),
+            orientation = ProjectOrientation.PORTRAIT
         ),
         ProjectItem(
             id = "proj_blank",
@@ -160,7 +170,8 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
             templateName = "Blank 3D Scene",
             entityCount = 2,
             lastModified = "Yesterday",
-            scene = Scene.createBlank3DScene()
+            scene = Scene.createBlank3DScene(),
+            orientation = ProjectOrientation.AUTO_SENSOR
         )
     ))
     val projects: StateFlow<List<ProjectItem>> = _projects.asStateFlow()
@@ -186,6 +197,9 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
 
     private val _renderStats = MutableStateFlow(RenderStats())
     val renderStats: StateFlow<RenderStats> = _renderStats.asStateFlow()
+
+    private val _cameraRevision = MutableStateFlow(0L)
+    val cameraRevision: StateFlow<Long> = _cameraRevision.asStateFlow()
 
     private val _isWireframeMode = MutableStateFlow(false)
     val isWireframeMode: StateFlow<Boolean> = _isWireframeMode.asStateFlow()
@@ -304,8 +318,29 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
         _isWireframeMode.value = !_isWireframeMode.value
     }
 
+    private var lastStatsUpdateTime = 0L
+
     fun updateRenderStats(stats: RenderStats) {
-        _renderStats.value = stats
+        val now = System.currentTimeMillis()
+        if (now - lastStatsUpdateTime >= 500L) {
+            lastStatsUpdateTime = now
+            _renderStats.value = stats
+        }
+    }
+
+    fun orbitCamera(deltaYaw: Float, deltaPitch: Float) {
+        camera.orbit(deltaYaw, deltaPitch)
+        _cameraRevision.value++
+    }
+
+    fun zoomCamera(deltaDist: Float) {
+        camera.zoom(deltaDist)
+        _cameraRevision.value++
+    }
+
+    fun panCamera(deltaX: Float, deltaY: Float) {
+        camera.pan(deltaX, deltaY)
+        _cameraRevision.value++
     }
 
     // Entity manipulations
@@ -618,7 +653,7 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
         log("Project", "Loaded Scene: ${project.name} (${project.templateName})")
     }
 
-    fun createProject(name: String, templateType: String) {
+    fun createProject(name: String, templateType: String, orientation: ProjectOrientation = ProjectOrientation.LANDSCAPE) {
         val newScene = when (templateType) {
             "FPS" -> Scene.createFpsArena(name)
             "CYBER" -> Scene.createCyberpunkGlow(name)
@@ -634,18 +669,28 @@ class EngineViewModel : ViewModel(), EngineCallbacks {
             templateName = templateType,
             entityCount = newScene.entities.size,
             lastModified = "Just now",
-            scene = newScene
+            scene = newScene,
+            orientation = orientation
         )
         _projects.value = listOf(newProject) + _projects.value
         openProject(newProject)
-        log("Project", "Created new project scene: $name")
+        log("Project", "Created new project scene: $name (${orientation.badge})")
+    }
+
+    fun setProjectOrientation(projectId: String, orientation: ProjectOrientation) {
+        val list = _projects.value.map {
+            if (it.id == projectId) it.copy(orientation = orientation) else it
+        }
+        _projects.value = list
+        log("Project", "Changed project orientation to: ${orientation.title}")
     }
 
     fun duplicateProject(project: ProjectItem) {
         val dup = project.copy(
             id = "proj_${System.currentTimeMillis()}",
             name = "${project.name} (Copy)",
-            lastModified = "Just now"
+            lastModified = "Just now",
+            orientation = project.orientation
         )
         _projects.value = listOf(dup) + _projects.value
         log("Project", "Duplicated project: ${project.name}")

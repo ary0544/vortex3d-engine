@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -37,36 +39,65 @@ import com.example.viewmodel.EngineViewModel
 @Composable
 fun ConsoleLogView(
     viewModel: EngineViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isExpanded: Boolean = true,
+    onToggleExpand: (() -> Unit)? = null
 ) {
     val logs by viewModel.consoleLogs.collectAsState()
+    val lastLog = logs.lastOrNull()
 
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0F141C)),
-        shape = RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)
+        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.Terminal, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Engine & Lua Console", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF00E5FF))
-                Spacer(Modifier.weight(1f))
-                Text("${logs.size} logs", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            Spacer(Modifier.height(4.dp))
-
-            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(90.dp)
-                    .testTag("console_logs_list"),
-                reverseLayout = true
+                    .clickable(enabled = onToggleExpand != null) { onToggleExpand?.invoke() },
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(Icons.Default.Terminal, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Console", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF00E5FF))
+                Spacer(Modifier.width(8.dp))
+
+                if (!isExpanded && lastLog != null) {
+                    Text(
+                        text = "${lastLog.tag}: ${lastLog.message}",
+                        fontSize = 10.sp,
+                        color = Color(0xFF8B949E),
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+                    Text("${logs.size} logs", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                if (onToggleExpand != null) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                        contentDescription = if (isExpanded) "Collapse" else "Expand",
+                        tint = Color(0xFF8B949E),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            if (isExpanded) {
+                Spacer(Modifier.height(4.dp))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(85.dp)
+                        .testTag("console_logs_list"),
+                    reverseLayout = true
+                ) {
                 itemsIndexed(logs.reversed(), key = { index, log -> "${log.id}_$index" }) { _, log ->
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
@@ -116,4 +147,5 @@ fun ConsoleLogView(
             }
         }
     }
+}
 }

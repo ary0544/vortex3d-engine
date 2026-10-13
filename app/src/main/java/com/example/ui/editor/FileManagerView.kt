@@ -107,7 +107,7 @@ fun FileManagerView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0D1117))
-            .padding(10.dp)
+            .padding(8.dp)
     ) {
         // Permission Request Banner if not granted
         if (!hasPermission) {

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,19 +19,25 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.StayCurrentLandscape
+import androidx.compose.material.icons.filled.StayCurrentPortrait
 import androidx.compose.material.icons.filled.ViewInAr
+import com.example.viewmodel.ProjectOrientation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -300,7 +307,10 @@ fun ProjectHubScreen(
                                         viewModel.setPlayMode(true)
                                     },
                                     onDuplicate = { viewModel.duplicateProject(project) },
-                                    onDelete = { viewModel.deleteProject(project.id) }
+                                    onDelete = { viewModel.deleteProject(project.id) },
+                                    onChangeOrientation = { nextOrientation ->
+                                        viewModel.setProjectOrientation(project.id, nextOrientation)
+                                    }
                                 )
                             }
                             item(key = "bottom_spacer") {
@@ -312,8 +322,8 @@ fun ProjectHubScreen(
                 1 -> {
                     // Templates Grid / List
                     SceneTemplatesView(
-                        onCreateFromTemplate = { name, templateKey ->
-                            viewModel.createProject(name, templateKey)
+                        onCreateFromTemplate = { name, templateKey, orientation ->
+                            viewModel.createProject(name, templateKey, orientation)
                         }
                     )
                 }
@@ -328,8 +338,8 @@ fun ProjectHubScreen(
     if (showCreateDialog) {
         CreateNewSceneDialog(
             onDismiss = { showCreateDialog = false },
-            onCreate = { name, template ->
-                viewModel.createProject(name, template)
+            onCreate = { name, template, orientation ->
+                viewModel.createProject(name, template, orientation)
                 showCreateDialog = false
             }
         )
@@ -343,99 +353,108 @@ fun ProjectCard(
     onOpen: () -> Unit,
     onPlay: () -> Unit,
     onDuplicate: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onChangeOrientation: (ProjectOrientation) -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .testTag("project_card_${project.id}"),
+            .testTag("project_card_${project.id}")
+            .clickable { onOpen() },
         colors = CardDefaults.cardColors(
             containerColor = if (isActive) Color(0xFF1E2838) else Color(0xFF161B24)
         ),
         shape = RoundedCornerShape(10.dp),
-        border = if (isActive) androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF478CBF)) else null
+        border = androidx.compose.foundation.BorderStroke(
+            width = if (isActive) 1.5.dp else 1.dp,
+            color = if (isActive) Color(0xFF478CBF) else Color(0xFF30363D)
+        )
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(10.dp)
         ) {
-            // Thumbnail / Icon Badge
-            Box(
-                modifier = Modifier
-                    .size(54.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        when (project.templateName) {
-                            "FPS Action Arena", "FPS" -> Color(0xFF6A1B9A)
-                            "Cyberpunk Neo World", "CYBER" -> Color(0xFF00695C)
-                            "Blank 3D Scene", "BLANK" -> Color(0xFF37474F)
-                            else -> Color(0xFF1565C0)
-                        }
-                    ),
-                contentAlignment = Alignment.Center
+            // Row 1: Icon + Project Header & Badges + Quick Run Button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = when (project.templateName) {
-                        "FPS Action Arena", "FPS" -> Icons.Default.SportsEsports
-                        "Cyberpunk Neo World", "CYBER" -> Icons.Default.AutoAwesome
-                        else -> Icons.Default.ViewInAr
-                    },
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            // Project Info
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = project.name,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = Color(0xFFF0F6FC)
+                // Thumbnail / Icon Badge
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            when (project.templateName) {
+                                "FPS Action Arena", "FPS" -> Color(0xFF6A1B9A)
+                                "Cyberpunk Neo World", "CYBER" -> Color(0xFF00695C)
+                                "Blank 3D Scene", "BLANK" -> Color(0xFF37474F)
+                                else -> Color(0xFF1565C0)
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = when (project.templateName) {
+                            "FPS Action Arena", "FPS" -> Icons.Default.SportsEsports
+                            "Cyberpunk Neo World", "CYBER" -> Icons.Default.AutoAwesome
+                            else -> Icons.Default.ViewInAr
+                        },
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
                     )
-                    if (isActive) {
-                        Spacer(Modifier.width(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF478CBF).copy(alpha = 0.2f))
-                                .border(1.dp, Color(0xFF478CBF), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text("CURRENT", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
+                }
+
+                Spacer(Modifier.width(10.dp))
+
+                // Project Info
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = project.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color(0xFFF0F6FC),
+                            maxLines = 1
+                        )
+                        if (isActive) {
+                            Spacer(Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFF478CBF).copy(alpha = 0.25f))
+                                    .border(1.dp, Color(0xFF478CBF), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Text("ACTIVE", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
+                            }
                         }
                     }
-                }
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+
+                    Spacer(Modifier.height(3.dp))
+
                     Text(
                         text = "${project.entityCount} Nodes • ${project.templateName}",
                         fontSize = 11.sp,
-                        color = Color(0xFF8B949E)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "• ${project.lastModified}",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6E7681)
+                        color = Color(0xFF8B949E),
+                        maxLines = 1
                     )
                 }
-            }
 
-            Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(8.dp))
 
-            // Action Buttons
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Play Game Directly
-                IconButton(
-                    onClick = onPlay,
-                    modifier = Modifier.size(34.dp).testTag("btn_play_${project.id}")
+                // Primary Run/Play Button
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF00E676).copy(alpha = 0.15f))
+                        .border(1.dp, Color(0xFF00E676).copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        .clickable { onPlay() }
+                        .testTag("btn_play_${project.id}"),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
@@ -444,45 +463,126 @@ fun ProjectCard(
                         modifier = Modifier.size(20.dp)
                     )
                 }
+            }
 
-                // Edit / Open Scene in 3D Studio
-                Button(
-                    onClick = onOpen,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF478CBF)),
-                    shape = RoundedCornerShape(6.dp),
+            Spacer(Modifier.height(8.dp))
+
+            // Thin separation line
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color(0xFF21262D))
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // Row 2: Orientation Toggle Badge + Action Buttons (Edit, Duplicate, Delete)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Clickable orientation indicator
+                Box(
                     modifier = Modifier
-                        .height(34.dp)
-                        .testTag("btn_edit_${project.id}")
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            when (project.orientation) {
+                                ProjectOrientation.LANDSCAPE -> Color(0xFF1565C0).copy(alpha = 0.25f)
+                                ProjectOrientation.PORTRAIT -> Color(0xFF6A1B9A).copy(alpha = 0.25f)
+                                ProjectOrientation.AUTO_SENSOR -> Color(0xFF00695C).copy(alpha = 0.25f)
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            when (project.orientation) {
+                                ProjectOrientation.LANDSCAPE -> Color(0xFF1E88E5).copy(alpha = 0.4f)
+                                ProjectOrientation.PORTRAIT -> Color(0xFF8E24AA).copy(alpha = 0.4f)
+                                ProjectOrientation.AUTO_SENSOR -> Color(0xFF00897B).copy(alpha = 0.4f)
+                            },
+                            RoundedCornerShape(6.dp)
+                        )
+                        .clickable {
+                            val next = when (project.orientation) {
+                                ProjectOrientation.LANDSCAPE -> ProjectOrientation.PORTRAIT
+                                ProjectOrientation.PORTRAIT -> ProjectOrientation.AUTO_SENSOR
+                                ProjectOrientation.AUTO_SENSOR -> ProjectOrientation.LANDSCAPE
+                            }
+                            onChangeOrientation(next)
+                        }
+                        .padding(horizontal = 7.dp, vertical = 4.dp)
                 ) {
-                    Text("Edit", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = when (project.orientation) {
+                                ProjectOrientation.LANDSCAPE -> Icons.Default.StayCurrentLandscape
+                                ProjectOrientation.PORTRAIT -> Icons.Default.StayCurrentPortrait
+                                ProjectOrientation.AUTO_SENSOR -> Icons.Default.ScreenRotation
+                            },
+                            contentDescription = "Toggle Orientation",
+                            tint = when (project.orientation) {
+                                ProjectOrientation.LANDSCAPE -> Color(0xFF64B5F6)
+                                ProjectOrientation.PORTRAIT -> Color(0xFFBA68C8)
+                                ProjectOrientation.AUTO_SENSOR -> Color(0xFF4DB6AC)
+                            },
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = "${project.orientation.badge} Mode",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = when (project.orientation) {
+                                ProjectOrientation.LANDSCAPE -> Color(0xFF64B5F6)
+                                ProjectOrientation.PORTRAIT -> Color(0xFFBA68C8)
+                                ProjectOrientation.AUTO_SENSOR -> Color(0xFF4DB6AC)
+                            }
+                        )
+                    }
                 }
 
-                Spacer(Modifier.width(4.dp))
+                // Action Buttons Row (Compact 30dp height, Godot 4 style)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Button(
+                        onClick = onOpen,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF478CBF)),
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier
+                            .height(30.dp)
+                            .testTag("btn_edit_${project.id}")
+                    ) {
+                        Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Editor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
 
-                // Duplicate
-                IconButton(
-                    onClick = onDuplicate,
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Duplicate",
-                        tint = Color(0xFF8B949E),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                    Spacer(Modifier.width(6.dp))
 
-                // Delete
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = Color(0xFFFF5252),
-                        modifier = Modifier.size(16.dp)
-                    )
+                    IconButton(
+                        onClick = onDuplicate,
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Duplicate",
+                            tint = Color(0xFF8B949E),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = Color(0xFFFF5252),
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
                 }
             }
         }
@@ -491,7 +591,7 @@ fun ProjectCard(
 
 @Composable
 fun SceneTemplatesView(
-    onCreateFromTemplate: (String, String) -> Unit
+    onCreateFromTemplate: (String, String, ProjectOrientation) -> Unit
 ) {
     val templates = listOf(
         TemplateCardData(
@@ -500,7 +600,8 @@ fun SceneTemplatesView(
             subtitle = "Rigid bodies, bouncing spheres, stacking boxes, ground plane, hero Lua controller.",
             badge = "Recommended",
             icon = Icons.Default.ViewInAr,
-            color = Color(0xFF1565C0)
+            color = Color(0xFF1565C0),
+            defaultOrientation = ProjectOrientation.LANDSCAPE
         ),
         TemplateCardData(
             id = "FPS",
@@ -508,7 +609,8 @@ fun SceneTemplatesView(
             subtitle = "Pre-configured arena walls, obstacles, responsive touch player controller, dynamic lighting.",
             badge = "Gameplay",
             icon = Icons.Default.SportsEsports,
-            color = Color(0xFF6A1B9A)
+            color = Color(0xFF6A1B9A),
+            defaultOrientation = ProjectOrientation.LANDSCAPE
         ),
         TemplateCardData(
             id = "CYBER",
@@ -516,7 +618,8 @@ fun SceneTemplatesView(
             subtitle = "Neon spinning quantum torus, reflective floor, dual magenta/cyan point lights, custom shaders.",
             badge = "VFX & Shader",
             icon = Icons.Default.AutoAwesome,
-            color = Color(0xFF00695C)
+            color = Color(0xFF00695C),
+            defaultOrientation = ProjectOrientation.PORTRAIT
         ),
         TemplateCardData(
             id = "BLANK",
@@ -524,7 +627,8 @@ fun SceneTemplatesView(
             subtitle = "Clean minimalist starting scene with single directional sun and grid floor.",
             badge = "Minimal",
             icon = Icons.Default.Layers,
-            color = Color(0xFF37474F)
+            color = Color(0xFF37474F),
+            defaultOrientation = ProjectOrientation.AUTO_SENSOR
         )
     )
 
@@ -570,6 +674,15 @@ fun SceneTemplatesView(
                                 ) {
                                     Text(template.badge, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
                                 }
+                                Spacer(Modifier.width(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF21262D))
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    Text(template.defaultOrientation.badge, fontSize = 8.sp, color = Color(0xFF8B949E))
+                                }
                             }
                             Spacer(Modifier.height(2.dp))
                             Text(
@@ -589,7 +702,7 @@ fun SceneTemplatesView(
                     ) {
                         Button(
                             onClick = {
-                                onCreateFromTemplate(template.title, template.id)
+                                onCreateFromTemplate(template.title, template.id, template.defaultOrientation)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF478CBF)),
                             shape = RoundedCornerShape(6.dp),
@@ -615,7 +728,8 @@ data class TemplateCardData(
     val subtitle: String,
     val badge: String,
     val icon: ImageVector,
-    val color: Color
+    val color: Color,
+    val defaultOrientation: ProjectOrientation = ProjectOrientation.LANDSCAPE
 )
 
 @Composable
@@ -655,10 +769,11 @@ fun EngineSpecsView() {
 @Composable
 fun CreateNewSceneDialog(
     onDismiss: () -> Unit,
-    onCreate: (String, String) -> Unit
+    onCreate: (String, String, ProjectOrientation) -> Unit
 ) {
     var sceneName by remember { mutableStateOf("My 3D Level") }
     var selectedTemplate by remember { mutableStateOf("DEFAULT") }
+    var selectedOrientation by remember { mutableStateOf(ProjectOrientation.LANDSCAPE) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -695,7 +810,10 @@ fun CreateNewSceneDialog(
                 ) {
                     FilterChip(
                         selected = selectedTemplate == "DEFAULT",
-                        onClick = { selectedTemplate = "DEFAULT" },
+                        onClick = {
+                            selectedTemplate = "DEFAULT"
+                            selectedOrientation = ProjectOrientation.LANDSCAPE
+                        },
                         label = { Text("Playground", fontSize = 11.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFF478CBF),
@@ -704,7 +822,10 @@ fun CreateNewSceneDialog(
                     )
                     FilterChip(
                         selected = selectedTemplate == "FPS",
-                        onClick = { selectedTemplate = "FPS" },
+                        onClick = {
+                            selectedTemplate = "FPS"
+                            selectedOrientation = ProjectOrientation.LANDSCAPE
+                        },
                         label = { Text("FPS Arena", fontSize = 11.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFF6A1B9A),
@@ -713,7 +834,10 @@ fun CreateNewSceneDialog(
                     )
                     FilterChip(
                         selected = selectedTemplate == "CYBER",
-                        onClick = { selectedTemplate = "CYBER" },
+                        onClick = {
+                            selectedTemplate = "CYBER"
+                            selectedOrientation = ProjectOrientation.PORTRAIT
+                        },
                         label = { Text("Cyberpunk", fontSize = 11.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Color(0xFF00695C),
@@ -724,20 +848,69 @@ fun CreateNewSceneDialog(
                 Spacer(Modifier.height(4.dp))
                 FilterChip(
                     selected = selectedTemplate == "BLANK",
-                    onClick = { selectedTemplate = "BLANK" },
+                    onClick = {
+                        selectedTemplate = "BLANK"
+                        selectedOrientation = ProjectOrientation.AUTO_SENSOR
+                    },
                     label = { Text("Blank 3D Scene", fontSize = 11.sp) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = Color(0xFF37474F),
                         selectedLabelColor = Color.White
                     )
                 )
+
+                Spacer(Modifier.height(14.dp))
+                Text("Target Orientation", fontSize = 12.sp, color = Color(0xFF8B949E))
+                Spacer(Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilterChip(
+                        selected = selectedOrientation == ProjectOrientation.LANDSCAPE,
+                        onClick = { selectedOrientation = ProjectOrientation.LANDSCAPE },
+                        label = { Text("Landscape", fontSize = 11.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.StayCurrentLandscape, contentDescription = null, modifier = Modifier.size(14.dp))
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF1565C0),
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                    FilterChip(
+                        selected = selectedOrientation == ProjectOrientation.PORTRAIT,
+                        onClick = { selectedOrientation = ProjectOrientation.PORTRAIT },
+                        label = { Text("Portrait", fontSize = 11.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.StayCurrentPortrait, contentDescription = null, modifier = Modifier.size(14.dp))
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF6A1B9A),
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                    FilterChip(
+                        selected = selectedOrientation == ProjectOrientation.AUTO_SENSOR,
+                        onClick = { selectedOrientation = ProjectOrientation.AUTO_SENSOR },
+                        label = { Text("Auto", fontSize = 11.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.ScreenRotation, contentDescription = null, modifier = Modifier.size(14.dp))
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Color(0xFF00695C),
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
                     if (sceneName.isNotBlank()) {
-                        onCreate(sceneName.trim(), selectedTemplate)
+                        onCreate(sceneName.trim(), selectedTemplate, selectedOrientation)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF478CBF)),

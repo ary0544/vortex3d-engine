@@ -505,7 +505,12 @@ fun LandscapeStudioScreen(
 
         // 4. BOTTOM EXPANDABLE DRAWER: Console Log
         if (isBottomDockOpen) {
-            ConsoleLogView(viewModel = viewModel, modifier = Modifier.height(95.dp))
+            ConsoleLogView(
+                viewModel = viewModel,
+                modifier = Modifier.height(95.dp),
+                isExpanded = true,
+                onToggleExpand = { viewModel.toggleBottomDock() }
+            )
         }
     }
 }

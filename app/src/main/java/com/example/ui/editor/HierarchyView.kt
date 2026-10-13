@@ -71,7 +71,7 @@ fun HierarchyView(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(12.dp)
+            .padding(8.dp)
     ) {
         // Top action bar
         Row(
@@ -82,17 +82,19 @@ fun HierarchyView(
             Text(
                 text = "Scene Hierarchy",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp
             )
 
             Box {
                 Button(
                     onClick = { showAddMenu = true },
-                    modifier = Modifier.testTag("add_entity_button")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(30.dp).testTag("add_entity_button")
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Entity", modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add 3D", fontSize = 12.sp)
+                    Icon(Icons.Default.Add, contentDescription = "Add Entity", modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Add 3D", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 DropdownMenu(
@@ -100,32 +102,34 @@ fun HierarchyView(
                     onDismissRequest = { showAddMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Cube (RigidBody)") },
+                        text = { Text("Cube (RigidBody)", fontSize = 12.sp) },
                         onClick = { viewModel.addPrimitive("cube"); showAddMenu = false }
                     )
                     DropdownMenuItem(
-                        text = { Text("Sphere (Bouncing)") },
+                        text = { Text("Sphere (Bouncing)", fontSize = 12.sp) },
                         onClick = { viewModel.addPrimitive("sphere"); showAddMenu = false }
                     )
                     DropdownMenuItem(
-                        text = { Text("Cylinder") },
+                        text = { Text("Cylinder", fontSize = 12.sp) },
                         onClick = { viewModel.addPrimitive("cylinder"); showAddMenu = false }
                     )
                     DropdownMenuItem(
-                        text = { Text("Torus (Holo Portal)") },
+                        text = { Text("Torus (Holo Portal)", fontSize = 12.sp) },
                         onClick = { viewModel.addPrimitive("torus"); showAddMenu = false }
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search entities...", fontSize = 12.sp) },
+            placeholder = { Text("Search nodes...", fontSize = 11.sp) },
             singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
+            shape = RoundedCornerShape(6.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("search_entity_input")

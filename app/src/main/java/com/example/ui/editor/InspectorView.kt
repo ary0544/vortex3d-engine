@@ -1,7 +1,9 @@
 package com.example.ui.editor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Palette
@@ -63,7 +66,7 @@ fun InspectorView(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(12.dp)
+            .padding(8.dp)
             .verticalScroll(rememberScrollState())
     ) {
         Text(
@@ -115,15 +118,15 @@ fun InspectorView(
                 // Position X, Y, Z
                 Text("Position (X, Y, Z)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AxisStepper("X", selectedEntity.transform.position.x, Color(0xFFFF5252)) { delta ->
+                    AxisStepper(modifier = Modifier.weight(1f), axis = "X", value = selectedEntity.transform.position.x, color = Color(0xFFFF5252)) { delta ->
                         val p = selectedEntity.transform.position
                         viewModel.updateSelectedEntity { it.withPosition(p.copy(x = p.x + delta)) }
                     }
-                    AxisStepper("Y", selectedEntity.transform.position.y, Color(0xFF69F0AE)) { delta ->
+                    AxisStepper(modifier = Modifier.weight(1f), axis = "Y", value = selectedEntity.transform.position.y, color = Color(0xFF69F0AE)) { delta ->
                         val p = selectedEntity.transform.position
                         viewModel.updateSelectedEntity { it.withPosition(p.copy(y = p.y + delta)) }
                     }
-                    AxisStepper("Z", selectedEntity.transform.position.z, Color(0xFF448AFF)) { delta ->
+                    AxisStepper(modifier = Modifier.weight(1f), axis = "Z", value = selectedEntity.transform.position.z, color = Color(0xFF448AFF)) { delta ->
                         val p = selectedEntity.transform.position
                         viewModel.updateSelectedEntity { it.withPosition(p.copy(z = p.z + delta)) }
                     }
@@ -344,6 +347,7 @@ fun InspectorView(
 
 @Composable
 private fun AxisStepper(
+    modifier: Modifier = Modifier,
     axis: String,
     value: Float,
     color: Color,
@@ -352,30 +356,40 @@ private fun AxisStepper(
     Card(
         colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.15f)),
         shape = RoundedCornerShape(6.dp),
-        modifier = Modifier
+        modifier = modifier
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 3.dp)
         ) {
-            Text(axis, color = color, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            Spacer(Modifier.width(4.dp))
-            Text(String.format("%.1f", value), fontSize = 12.sp)
-            Spacer(Modifier.width(4.dp))
-            OutlinedButton(
-                onClick = { onStep(-0.5f) },
-                modifier = Modifier.size(24.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-            ) {
-                Text("-", fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(axis, color = color, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                Spacer(Modifier.width(2.dp))
+                Text(String.format("%.1f", value), fontSize = 10.sp, maxLines = 1)
             }
-            Spacer(Modifier.width(2.dp))
-            OutlinedButton(
-                onClick = { onStep(0.5f) },
-                modifier = Modifier.size(24.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
-            ) {
-                Text("+", fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(19.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0xFF21262D))
+                        .clickable { onStep(-0.5f) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("-", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+                Spacer(Modifier.width(2.dp))
+                Box(
+                    modifier = Modifier
+                        .size(19.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(Color(0xFF21262D))
+                        .clickable { onStep(0.5f) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
             }
         }
     }
