@@ -29,19 +29,19 @@ data class Scene(
                         scale = Vec3(1f, 1f, 1f)
                     ),
                     meshRenderer = MeshRendererComponent(meshId = "mesh_plane", materialId = "mat_default"),
-                    rigidBody = RigidBodyComponent(isStatic = true, restitution = 0.5f, friction = 0.4f, colliderShape = ColliderShape.PLANE)
+                    rigidBody = RigidBodyComponent(isStatic = true, restitution = 0.1f, friction = 0.5f, colliderShape = ColliderShape.PLANE)
                 ),
                 // Hero / Dynamic Player Sphere with Lua Script
                 Entity(
                     id = "ent_hero_orb",
                     name = "Player Orb",
                     transform = TransformComponent(
-                        position = Vec3(0f, 4.5f, 0f),
+                        position = Vec3(0f, 0.55f, 0f),
                         rotation = Vec3.ZERO,
                         scale = Vec3(1f, 1f, 1f)
                     ),
                     meshRenderer = MeshRendererComponent(meshId = "mesh_sphere", materialId = "mat_gold"),
-                    rigidBody = RigidBodyComponent(mass = 2.0f, isStatic = false, restitution = 0.75f, friction = 0.3f, colliderShape = ColliderShape.SPHERE),
+                    rigidBody = RigidBodyComponent(mass = 2.0f, isStatic = false, restitution = 0.05f, friction = 0.5f, colliderShape = ColliderShape.SPHERE),
                     luaScript = LuaScriptComponent(
                         scriptId = "script_hero",
                         scriptName = "HeroController.lua",
@@ -60,9 +60,11 @@ data class Scene(
                                     physics:apply_force(h * 15.0, 0, v * 15.0)
                                 end
                                 
-                                if input:is_action_pressed("Jump") then
-                                    physics:apply_impulse(0, 8.0, 0)
-                                    engine:play_sound("jump")
+                                if input:is_action_pressed("Jump") or input_jump then
+                                    if is_grounded then
+                                        physics:apply_impulse(0, 8.0, 0)
+                                        engine:play_sound("jump")
+                                    end
                                 end
                             end
 

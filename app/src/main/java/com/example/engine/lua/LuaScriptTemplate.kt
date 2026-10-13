@@ -35,9 +35,9 @@ object LuaScriptLibrary {
                         entity:rotate(0, h * 120.0 * dt, 0)
                     end
 
-                    -- 3. Lompatan dengan tombol Jump
-                    if input_jump then
-                        physics:apply_impulse(0, 9.0, 0)
+                    -- 3. Lompatan dengan tombol Jump (hanya saat menyentuh pijakan)
+                    if input_jump and is_grounded then
+                        physics:apply_impulse(0, 8.5, 0)
                         engine:play_sound("jump")
                     end
 
@@ -69,9 +69,9 @@ object LuaScriptLibrary {
                         entity:rotate(0, input_h * 90.0 * dt, 0)
                     end
 
-                    -- Lompat saat tombol jump ditekan
-                    if input_jump then
-                        physics:apply_impulse(0, 8.5, 0)
+                    -- Lompat saat tombol jump ditekan (hanya saat menyentuh pijakan)
+                    if input_jump and is_grounded then
+                        physics:apply_impulse(0, 8.0, 0)
                         engine:play_sound("jump")
                     end
                 end
@@ -114,12 +114,14 @@ object LuaScriptLibrary {
             content = """
                 -- Vertical Bounce Script
                 function update(dt)
-                    physics:apply_force(0, 12.0 * dt, 0)
+                    -- idle
                 end
 
                 function on_collision(other)
-                    physics:apply_impulse(0, 10.0, 0)
-                    engine:play_sound("bounce")
+                    if is_grounded then
+                        physics:apply_impulse(0, 7.5, 0)
+                        engine:play_sound("bounce")
+                    end
                 end
             """.trimIndent()
         )

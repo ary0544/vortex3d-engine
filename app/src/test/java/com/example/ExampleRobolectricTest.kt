@@ -181,4 +181,60 @@ class ExampleRobolectricTest {
         assertTrue("Camera target Y must be reasonable: ${cameraTarget.y}", cameraTarget.y in 0f..10f)
         assertTrue("Entity Y must be reasonable: ${entity.transform.position.y}", entity.transform.position.y in 0f..10f)
     }
+
+    @Test
+    fun `test is_grounded prevents mid-air repeated jump`() {
+        val callbacks = object : EngineCallbacks {
+            override fun log(tag: String, message: String) {}
+            override fun playSound(soundName: String) {}
+            override fun updateEntity(updated: Entity) {}
+            override fun getEntity(id: String): Entity? = null
+        }
+
+        // Entity in air (y = 5.0f, isGrounded = false)
+        val airEntity = Entity(
+            id = "air_hero",
+            name = "AirHero",
+            transform = TransformComponent(position = Vec3(0f, 5.0f, 0f)),
+            rigidBody = RigidBodyComponent(mass = 1.0f, velocity = Vec3.ZERO, isGrounded = false)
+        )
+
+        val interp = LuaInterpreter(airEntity.id, callbacks)
+        val script = """
+            function update(dt)
+                if input_jump and is_grounded then
+                    physics:apply_impulse(0, 8.0, 0)
+                end
+            end
+        """.trimIndent()
+
+        // Jump triggered while in mid-air must be ignored
+        val resAir = interp.executeUpdate(script, 0.016f, airEntity, InputState(actionJump = true))
+        assertEquals(0f, resAir.rigidBody?.velocity?.y ?: 0f, 0.001f)
+
+        // Entity on ground (isGrounded = true)
+        val groundedEntity = airEntity.copy(
+            transform = TransformComponent(position = Vec3(0f, 0.5f, 0f)),
+            rigidBody = RigidBodyComponent(mass = 1.0f, velocity = Vec3.ZERO, isGrounded = true)
+        )
+        val resGrounded = interp.executeUpdate(script, 0.016f, groundedEntity, InputState(actionJump = true))
+        assertEquals(8.0f, resGrounded.rigidBody?.velocity?.y ?: 0f, 0.001f)
+    }
+
+    @Test
+    fun `test physics engine grounds falling sphere cleanly`() {
+        val engine = com.example.engine.physics.PhysicsEngine()
+        val sphere = Entity(
+            id = "test_sphere",
+            name = "Sphere",
+            transform = TransformComponent(position = Vec3(0f, 0.5f, 0f)),
+            rigidBody = RigidBodyComponent(mass = 1.0f, velocity = Vec3(0f, -0.1f, 0f), restitution = 0.05f, colliderShape = ColliderShape.SPHERE)
+        )
+
+        val updated = engine.step(listOf(sphere), 0.016f)
+        val rb = updated[0].rigidBody
+        assertNotNull(rb)
+        assertTrue("Sphere should be marked as grounded when resting on floor", rb!!.isGrounded)
+    }
 }
+

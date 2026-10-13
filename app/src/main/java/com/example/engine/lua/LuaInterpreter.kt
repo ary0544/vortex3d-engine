@@ -41,6 +41,10 @@ class LuaInterpreter(
         variables["input_v"] = input.vertical
         variables["input_jump"] = input.actionJump
         variables["input_fire"] = input.actionFire
+        val rb = currentEntity.rigidBody
+        val isGrounded = rb?.isGrounded ?: (currentEntity.transform.position.y <= 0.65f)
+        variables["is_grounded"] = isGrounded
+        variables["grounded"] = isGrounded
         variables["pos_x"] = currentEntity.transform.position.x
         variables["pos_y"] = currentEntity.transform.position.y
         variables["pos_z"] = currentEntity.transform.position.z
@@ -151,8 +155,11 @@ class LuaInterpreter(
     }
 
     private fun evalBoolean(condition: String): Boolean {
-        val c = condition.trim()
+        var c = condition.trim()
         if (c.isEmpty()) return false
+        if (c.startsWith("(") && c.endsWith(")") && c.length > 2) {
+            c = c.substring(1, c.length - 1).trim()
+        }
         if (c == "true") return true
         if (c == "false") return false
 
@@ -173,7 +180,7 @@ class LuaInterpreter(
             return !evalBoolean(c.removePrefix("not ").trim())
         }
 
-        // Handle action triggers
+        // Handle action triggers and grounded state
         if (c.contains("input:is_action_pressed(\"Jump\")") || c.contains("input:is_action_pressed('Jump')")) {
             return (variables["input_jump"] as? Boolean) ?: false
         }
@@ -185,6 +192,9 @@ class LuaInterpreter(
         }
         if (c == "input_fire") {
             return (variables["input_fire"] as? Boolean) ?: false
+        }
+        if (c == "is_grounded" || c == "grounded" || c == "physics:is_grounded()" || c == "entity:is_grounded()") {
+            return (variables["is_grounded"] as? Boolean) ?: false
         }
 
         // Handle comparison: ~= or !=
@@ -328,7 +338,10 @@ class LuaInterpreter(
                         newVel.y.coerceIn(-30f, 22f),
                         newVel.z.coerceIn(-30f, 30f)
                     )
-                    entity = entity.copy(rigidBody = rb.copy(velocity = clampedVel))
+                    val nextGrounded = if (iy > 0.5f) false else rb.isGrounded
+                    variables["is_grounded"] = nextGrounded
+                    variables["grounded"] = nextGrounded
+                    entity = entity.copy(rigidBody = rb.copy(velocity = clampedVel, isGrounded = nextGrounded))
                 }
             }
         }

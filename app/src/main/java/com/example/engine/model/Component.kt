@@ -47,13 +47,14 @@ enum class ColliderShape {
 data class RigidBodyComponent(
     val mass: Float = 1.0f,
     val isStatic: Boolean = false,
-    val restitution: Float = 0.6f, // Bounciness [0..1]
-    val friction: Float = 0.3f,
+    val restitution: Float = 0.1f, // Bounciness [0..1] - sensible default, was 0.6f causing infinite bouncing
+    val friction: Float = 0.4f,
     val useGravity: Boolean = true,
     val colliderShape: ColliderShape = ColliderShape.BOX,
     val velocity: Vec3 = Vec3.ZERO,
     val angularVelocity: Vec3 = Vec3.ZERO,
-    val isSleeping: Boolean = false
+    val isSleeping: Boolean = false,
+    val isGrounded: Boolean = false
 ) : Component
 
 enum class LightType {

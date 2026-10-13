@@ -14,8 +14,8 @@ interface EngineCallbacks {
 }
 
 data class InputState(
-    var horizontal: Float = 0f,
-    var vertical: Float = 0f,
-    var actionJump: Boolean = false,
-    var actionFire: Boolean = false
+    @Volatile var horizontal: Float = 0f,
+    @Volatile var vertical: Float = 0f,
+    @Volatile var actionJump: Boolean = false,
+    @Volatile var actionFire: Boolean = false
 )

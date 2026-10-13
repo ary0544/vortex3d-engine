@@ -67,7 +67,7 @@ class PhysicsEngine(
 
             updated[i] = entity.copy(
                 transform = entity.transform.copy(position = newPos, rotation = newRot),
-                rigidBody = rb.copy(velocity = vel, angularVelocity = angVel)
+                rigidBody = rb.copy(velocity = vel, angularVelocity = angVel, isGrounded = false)
             )
         }
 
@@ -104,15 +104,22 @@ class PhysicsEngine(
                     val tangentVel = vel - normalVel
                     vel = tangentVel * (1f - rb.friction) - normalVel * rb.restitution
 
-                    // Ground friction stops micro-bounces
-                    if (abs(vel.y) < 0.15f) {
-                        vel = Vec3(vel.x * 0.9f, 0f, vel.z * 0.9f)
+                    // Ground friction stops micro-bounces and rests solidly
+                    if (abs(vel.y) < 0.45f) {
+                        vel = Vec3(vel.x * 0.85f, 0f, vel.z * 0.85f)
                     }
                 }
 
+                // If contacting ground and not launching upwards with high speed, mark as grounded
+                val isGroundedNow = vel.y <= 0.25f
+
                 updated[i] = entity.copy(
                     transform = entity.transform.copy(position = correctedPos),
-                    rigidBody = rb.copy(velocity = vel)
+                    rigidBody = rb.copy(velocity = vel, isGrounded = isGroundedNow)
+                )
+            } else {
+                updated[i] = entity.copy(
+                    rigidBody = rb.copy(isGrounded = false)
                 )
             }
         }
@@ -165,13 +172,16 @@ class PhysicsEngine(
                 val newVelA = if (rbA.isStatic) rbA.velocity else rbA.velocity - impulse * invMassA
                 val newVelB = if (rbB.isStatic) rbB.velocity else rbB.velocity + impulse * invMassB
 
+                val aOnTopOfB = normal.y < -0.5f && newVelA.y <= 0.25f
+                val bOnTopOfA = normal.y > 0.5f && newVelB.y <= 0.25f
+
                 updated[i] = a.copy(
                     transform = a.transform.copy(position = a.transform.position + sepA),
-                    rigidBody = rbA.copy(velocity = newVelA)
+                    rigidBody = rbA.copy(velocity = newVelA, isGrounded = if (aOnTopOfB) true else rbA.isGrounded)
                 )
                 updated[j] = b.copy(
                     transform = b.transform.copy(position = b.transform.position + sepB),
-                    rigidBody = rbB.copy(velocity = newVelB)
+                    rigidBody = rbB.copy(velocity = newVelB, isGrounded = if (bOnTopOfA) true else rbB.isGrounded)
                 )
             }
         }
