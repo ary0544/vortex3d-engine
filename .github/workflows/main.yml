@@ -1,4 +1,4 @@
-name: Build AI Studio arm64 Ultra-Light APK
+name: Build AI Studio Universal Release APK
 
 on:
   push:
@@ -33,11 +33,25 @@ jobs:
           echo "BUILD_TOOLS_PATH=$BUILD_TOOLS_DIR" >> $GITHUB_ENV
           echo "$BUILD_TOOLS_DIR" >> $GITHUB_PATH
 
-      - name: 4. Deteksi / Buat Keystore & Auto-Push ke Repo
+      - name: 4. Deteksi / Siapkan Keystore
         run: |
-          KEYSTORE_FILE=$(find . -maxdepth 2 -type f \( -name "*.jks" -o -name "*.keystore" \) | head -n 1)
-
-          if [ -z "$KEYSTORE_FILE" ]; then
+          if [ -f "keystore/keystore.properties" ] && [ -f "keystore/release.jks" ]; then
+            echo "Keystore resmi ditemukan di folder keystore/."
+            KEYSTORE_FILE="keystore/release.jks"
+            PASS=$(grep "^storePassword=" keystore/keystore.properties | cut -d'=' -f2 | tr -d '\r\n')
+            ALIAS=$(grep "^keyAlias=" keystore/keystore.properties | cut -d'=' -f2 | tr -d '\r\n')
+            KEYPASS=$(grep "^keyPassword=" keystore/keystore.properties | cut -d'=' -f2 | tr -d '\r\n')
+            echo "SIGNING_KEYSTORE=$KEYSTORE_FILE" >> $GITHUB_ENV
+            echo "SIGNING_PASS=${PASS:-androidrelease}" >> $GITHUB_ENV
+            echo "SIGNING_ALIAS=${ALIAS:-releasekey}" >> $GITHUB_ENV
+            echo "SIGNING_KEYPASS=${KEYPASS:-androidrelease}" >> $GITHUB_ENV
+          elif [ -f "keystore/release.jks" ]; then
+            echo "Keystore release.jks ditemukan."
+            echo "SIGNING_KEYSTORE=keystore/release.jks" >> $GITHUB_ENV
+            echo "SIGNING_PASS=androidrelease" >> $GITHUB_ENV
+            echo "SIGNING_ALIAS=releasekey" >> $GITHUB_ENV
+            echo "SIGNING_KEYPASS=androidrelease" >> $GITHUB_ENV
+          else
             echo "Signing key belum ditemukan. Membuat keystore baru..."
             mkdir -p keystore
             keytool -genkey -v \
@@ -48,7 +62,7 @@ jobs:
               -validity 10000 \
               -storepass androidrelease \
               -keypass androidrelease \
-              -dname "CN=AIStudioApp, OU=Mobile, O=AI, L=Jakarta, ST=Jakarta, C=ID"
+              -dname "CN=Vortex3D, OU=Mobile, O=AI, L=Jakarta, ST=Jakarta, C=ID"
 
             echo "storeFile=release.jks" > keystore/keystore.properties
             echo "storePassword=androidrelease" >> keystore/keystore.properties
@@ -60,16 +74,14 @@ jobs:
             git add keystore/
             git commit -m "ci: auto-generate release signing key [skip ci]" || echo "Tidak ada perubahan."
             git push origin HEAD:${{ github.ref_name }} || echo "Push dilewati atau branch terlindungi, lanjut build."
-            
-            echo "SIGNING_KEYSTORE=keystore/release.jks" >> $GITHUB_ENV
-          else
-            echo "Signing key ditemukan: $KEYSTORE_FILE"
-            echo "SIGNING_KEYSTORE=$KEYSTORE_FILE" >> $GITHUB_ENV
-          fi
-          echo "SIGNING_PASS=androidrelease" >> $GITHUB_ENV
-          echo "SIGNING_ALIAS=releasekey" >> $GITHUB_ENV
 
-      - name: 5. Auto-Heal, Proguard Protection, & Injeksi Versi
+            echo "SIGNING_KEYSTORE=keystore/release.jks" >> $GITHUB_ENV
+            echo "SIGNING_PASS=androidrelease" >> $GITHUB_ENV
+            echo "SIGNING_ALIAS=releasekey" >> $GITHUB_ENV
+            echo "SIGNING_KEYPASS=androidrelease" >> $GITHUB_ENV
+          fi
+
+      - name: 5. Auto-Heal, Injeksi Versi, & Konfigurasi Build
         env:
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
@@ -104,24 +116,7 @@ jobs:
           with open(gradle_props, "w") as f:
               f.write(props_content)
 
-          # 3. Proteksi Komponen Android di Proguard Rules agar APK tidak corrupt
-          proguard_rules = """
-          -dontwarn **
-          -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
-          -keep public class * extends android.app.Activity
-          -keep public class * extends android.app.Application
-          -keep public class * extends android.app.Service
-          -keep public class * extends android.content.BroadcastReceiver
-          -keep public class * extends android.content.ContentProvider
-          -keep public class * extends android.view.View { public <init>(...); }
-          -keepclasseswithmembers class * { public static void main(java.lang.String[]); }
-          """
-          for p_path in ["app/proguard-rules.pro", "proguard-rules.pro"]:
-              os.makedirs(os.path.dirname(p_path) or ".", exist_ok=True)
-              with open(p_path, "a+") as f:
-                  f.write(proguard_rules)
-
-          # 4. Modifikasi build.gradle / build.gradle.kts
+          # 3. Modifikasi build.gradle / build.gradle.kts
           target_build = "app/build.gradle.kts"
           if not os.path.exists(target_build):
               if os.path.exists("app/build.gradle"):
@@ -135,7 +130,7 @@ jobs:
               with open(target_build, "r") as f:
                   content = f.read()
 
-              # Tangani keystore fiktif
+              # Tangani keystore fiktif jika ada referensi path
               ks_matches = re.findall(r'[\'"]([^\'"]+\.(?:jks|keystore))[\'"]', content)
               if os.path.exists(ks_source):
                   for ks in ks_matches:
@@ -148,7 +143,7 @@ jobs:
                           except Exception:
                               pass
 
-              # Netralkan signingConfig bawaan agar dikontrol langsung oleh CI
+              # Netralkan signingConfig bawaan agar dikontrol langsung dan seragam oleh apksigner di CI
               content = re.sub(r'(?m)^(\s*)(signingConfig\s*=?\s*signingConfigs.*)$', r'\1// [CI AUTO-FIX] \2', content)
 
               # Peningkatan Versi Otomatis
@@ -157,9 +152,8 @@ jobs:
               content = re.sub(r'versionName\s+["\'][^"\']+["\']', f'versionName "1.0.{build_num}"', content)
               content = re.sub(r'versionName\s*=\s*["\'][^"\']+["\']', f'versionName = "1.0.{build_num}"', content)
 
-              # Aktifkan Minify tapi amankan resource shrinking
-              content = re.sub(r'minifyEnabled\s+false', 'minifyEnabled true', content)
-              content = re.sub(r'isMinifyEnabled\s*=\s*false', 'isMinifyEnabled = true', content)
+              # JANGAN paksa isMinifyEnabled = true jika proyek menggunakan Jetpack Compose & model tanpa full keep rules
+              # Pertahankan nilai asli build file agar dex dan class bytecode aman serta tidak corrupt
 
               with open(target_build, "w") as f:
                   f.write(content)
@@ -179,50 +173,59 @@ jobs:
             echo "GRADLE_BIN=gradle" >> $GITHUB_ENV
           fi
 
-      - name: 7. Compile Release APK (Khusus Arsitektur arm64-v8a)
+      - name: 7. Compile Release APK (Universal untuk Semua Arsitektur Perangkat)
         run: |
           $GRADLE_BIN assembleRelease \
             --no-daemon \
-            --stacktrace \
-            -Pandroid.injected.build.abi=arm64-v8a
+            --stacktrace
 
-      - name: 8. Alignment & Penandatanganan Resmi (V1 + V2 + V3 Signature)
+      - name: 8. Page-Alignment & Penandatanganan Resmi (V1 + V2 + V3 Signature)
         run: |
           echo "Mencari file APK..."
-          RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*ultra*" | grep -i "release" | head -n 1)
+          RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*universal*" | grep -i "release" | head -n 1)
           if [ -z "$RAW_APK" ]; then
-            RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*ultra*" | head -n 1)
+            RAW_APK=$(find . -type f -name "*.apk" ! -name "*aligned*" ! -name "*universal*" | head -n 1)
+          fi
+
+          if [ -z "$RAW_APK" ]; then
+            echo "ERROR: Tidak ada file APK yang ditemukan setelah assembleRelease!"
+            exit 1
           fi
 
           echo "APK Terpilih: $RAW_APK"
 
-          # 1. Zipalign APK (Standar 4-byte alignment)
-          zipalign -f -v 4 "$RAW_APK" aligned.apk
+          # 1. Zipalign APK dengan 4KB (-p) page-align untuk library .so
+          # CRITICAL: Bendera -p wajib ada agar library C++/native ter-align 4096-byte (page boundary).
+          # Tanpa -p, sistem Android Package Manager akan menolak instalasi dengan error INVALID_APK.
+          zipalign -f -p 4 "$RAW_APK" aligned.apk
+
+          # Verifikasi alignment sebelum ditandatangani
+          zipalign -c -p 4 aligned.apk && echo "Zipalign 4KB page-alignment sukses terverifikasi!"
 
           # 2. Tandatangani secara penuh dengan Skema V1 (JAR), V2 (Full APK), dan V3
           apksigner sign \
             --ks "$SIGNING_KEYSTORE" \
             --ks-pass pass:"$SIGNING_PASS" \
             --ks-key-alias "$SIGNING_ALIAS" \
-            --key-pass pass:"$SIGNING_PASS" \
+            --key-pass pass:"${SIGNING_KEYPASS:-$SIGNING_PASS}" \
             --v1-signing-enabled true \
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --v4-signing-enabled false \
-            --out app-arm64-v8a-ultra-release.apk \
+            --out app-universal-release.apk \
             aligned.apk
 
           # 3. Verifikasi tanda tangan secara detail (-v)
           echo "Hasil Verifikasi Signature:"
-          apksigner verify -v --print-certs app-arm64-v8a-ultra-release.apk
+          apksigner verify -v --print-certs app-universal-release.apk
 
           echo "Ukuran APK Final:"
-          ls -lh app-arm64-v8a-ultra-release.apk
+          ls -lh app-universal-release.apk
 
-      - name: 9. Unggah Artefak (1 File Tunggal & Mendukung Timpa Update)
+      - name: 9. Unggah Artefak APK Siap Pasang
         uses: actions/upload-artifact@v4
         with:
-          name: app-arm64-v8a-release
-          path: app-arm64-v8a-ultra-release.apk
+          name: app-universal-release
+          path: app-universal-release.apk
           if-no-files-found: error
           overwrite: true
