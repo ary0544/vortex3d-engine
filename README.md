@@ -4,229 +4,192 @@
 [![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20%28API%2024%2B%29-brightgreen.svg)](https://developer.android.com)
 [![Architecture](https://img.shields.io/badge/Architecture-ARM64--v8a%20%2864--bit%29-blue.svg)](https://developer.android.com/ndk/guides/abis)
 [![UI Framework](https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-purple.svg)](https://developer.android.com/jetpack/compose)
-[![Tested On](https://img.shields.io/badge/Tested%20On-Android%208%20%28aarch64%29-success.svg)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0%2B-orange.svg)](https://kotlinlang.org)
+[![Tested On](https://img.shields.io/badge/Tested%20On-Android%208%20%28aarch64%29%20to%20Android%2016-success.svg)](https://developer.android.com)
 
-**Vortex3D** adalah game engine 3D mandiri dan berkinerja tinggi untuk perangkat seluler Android, terinspirasi oleh alur kerja ergonomis **Godot Engine 4 Mobile Editor**. Engine ini menggabungkan rendering 3D interaktif, simulasi fisika real-time, runtime scripting Lua, editor shader GLSL, manajemen aset hierarkis, antarmuka dock panel adaptif, dan asisten AI co-pilot.
-
----
-
-## 🤖 AI Co-Pilot & Coding Agent Directives (Panduan untuk AI)
-
-> **PENTING UNTUK AGENT AI / LLM (Claude, ChatGPT, Gemini, Copilot, Cursor, dll.):**  
-> Saat Anda membaca atau memodifikasi repositori ini, patuhi aturan mutlak berikut:
-
-1. **Arsitektur Wajib ARM64 (64-bit Only):**
-   - File `app/build.gradle.kts` menetapkan `abiFilters.add("arm64-v8a")`. **JANGAN PERNAH** menambahkan `armeabi-v7a`, `x86`, atau `x86_64` kecuali diminta secara eksplisit oleh pengguna. CI/CD akan gagal otomatis jika library 32-bit terdeteksi dalam artefak.
-2. **Integritas Penandatanganan & Signing Configs:**
-   - **JANGAN HAPUS** blok `signingConfigs` (`release` dan `debugConfig`) di `app/build.gradle.kts`. CI/CD mengandalkan pipeline `apksigner` dengan skema **V1 + V2 + V3** otomatis.
-3. **Kompatibilitas Versi SDK:**
-   - Pertahankan `minSdk = 24` (Android 7.0+) dan `targetSdk = 36` / `compileSdk = 36`.
-   - Pastikan kode berjalan kompatibel di Android 8.0/8.1 Oreo (API 26/27) arsitektur `aarch64`.
-4. **UI & Desain Sistem:**
-   - Semua UI dibuat menggunakan **Jetpack Compose** dengan **Material 3 (M3)**. Jangan membuat tata letak XML baru kecuali untuk drawable/mipmap asset.
-   - Gunakan layout adaptif (`Compact`, `Medium`, `Expanded`) dengan densitas kompak terinspirasi oleh dock panel Godot 4.
-5. **Konvensi Kode & Penamaan:**
-   - Bahasa utama: **Kotlin** modern dengan Coroutines & StateFlow.
-   - Arsitektur: **MVVM** (`EngineViewModel` sebagai orkestrator state sentral).
-   - Selalu sertakan `Modifier.testTag("snake_case_name")` pada elemen aksi utama untuk pengujian otomatis.
+**Vortex3D** adalah game engine 3D mandiri (*standalone mobile 3D game engine*) yang dirancang khusus untuk ekosistem Android. Mengadopsi alur kerja ergonomis dari **Godot Engine 4 Mobile Editor**, Vortex3D memungkinkan seluruh tahapan pembuatan game—mulai dari penyusunan adegan 3D, pemrograman logika dengan skrip Lua, perancangan shader GLSL, simulasi fisika rigid body, inspeksi model 3D glTF biner (`.glb`), sintesis audio prosedural, hingga pengujian interaktif—dijalankan secara langsung di perangkat smartphone dan tablet tanpa memerlukan komputer desktop.
 
 ---
 
-## 📱 Panduan Kompatibilitas Android 8 (API 26/27) & ARM64
+## 📚 Navigasi Dokumentasi Resmi
 
-Jika Anda mengalami kendala saat memasang APK di perangkat Android 8 (Oreo) atau arsitektur `aarch64`, berikut adalah ringkasan teknis penyebab dan solusinya:
+Untuk kemudahan navigasi dan pemisahan dokumentasi yang terstruktur, repositori ini membagi panduan ke dalam dokumen-dokumen terpisah berikut:
 
-| Masalah yang Sering Terjadi | Penyebab Teknis | Solusi yang Diterapkan di Vortex3D |
-| :--- | :--- | :--- |
-| **"App not installed / Package corrupt"** | Android 8 wajib memverifikasi tanda tangan APK Skema V1 (JAR) & V2 (APK Signature Scheme v2). Build tool modern terkadang hanya menyematkan V3 atau V4. | Workflow CI/CD secara eksplisit menjalankan: `apksigner sign --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true`. |
-| **Gagal Aligned Halaman 4KB** | Android versi lama dan runtime biner membutuhkan 4KB page alignment pada zip file. | CI/CD menjalankan `zipalign -f -p 4 <apk> aligned.apk` sebelum proses signing. |
-| **Arsitektur Tidak Cocok** | Perangkat Android 8 `aarch64` menolak binary 32-bit jika flag native 64-bit diterapkan parsial. | `abiFilters.add("arm64-v8a")` diterapkan konsisten di Gradle dan divalidasi dengan `unzip -l *.apk`. |
-| **ClassDefNotFound / R8 Crash** | ProGuard / R8 meng-strip kelas refleksi atau Compose internal tanpa Keep rules yang tepat. | `isMinifyEnabled = false` dipertahankan pada build release agar seluruh runtime Lua dan Compose stabil. |
+* 📖 **[Panduan Penggunaan Dalam Aplikasi & Pemetaan Source Code (PANDUAN_APLIKASI.md)](./PANDUAN_APLIKASI.md)**  
+  *Panduan langkah demi langkah cara mengoperasikan seluruh fitur di dalam aplikasi seluler (Project Hub, 3D Viewport, Hierarchy, Inspector, Lua Editor, GLSL Shaders, File Manager, Audio Synthesizer, AI Co-Pilot, Play Mode) beserta pemetaan langsung ke fungsi, kelas, dan method asli pada kode sumber.*
+* 🛠️ **[Panduan Build, Kompilasi & CI/CD (PANDUAN_BUILD.md)](./PANDUAN_BUILD.md)**  
+  *Panduan kompilasi biner APK lokal menggunakan Gradle, konfigurasi toolchain SDK 36, penandatanganan Keystore (V1+V2+V3), ketentuan mutlak arsitektur ARM64-v8a, zipalign 4KB, dan otomatisasi GitHub Actions CI/CD.*
 
 ---
 
-## 🏛️ Arsitektur Proyek
+## 🌟 Visi & Filosofi Desain
 
-Struktur direktori utama Vortex3D:
+Pengembangan game pada perangkat bergerak sering kali terhambat oleh antarmuka desktop yang dipaksakan ke layar sentuh kecil. Vortex3D memecahkan masalah ini dengan pendekatan:
+
+1. **Ergonomi Layar Sentuh Kompak (Touch-First UX):** Mengimplementasikan sistem dock adaptif yang dapat dilipat (*collapsible panel dock*) dan bilah alat (*toolbar*) horizontal yang aman dari lekukan layar (*safe-area insets*).
+2. **Kemandirian Penuh (Zero-Dependency Runtime):** Tidak membutuhkan instalasi server eksternal atau runtime pihak ketiga. Semua subsistem (audio, interpreter skrip, fisika, rendering) dibangun native di atas JVM Kotlin dan Android Framework.
+3. **Kinerja Tinggi Khusus 64-bit (ARM64 Native):** Dioptimalkan secara ketat untuk arsitektur 64-bit (`arm64-v8a`) guna memastikan kalkulasi aljabar linier matriks 3D dan floating-point fisika berjalan mulus pada 60 FPS stabil.
+4. **Bantuan AI Generatif Terintegrasi:** Dilengkapi asisten co-pilot berbasis model mutakhir Gemini untuk menghasilkan skrip logika, mendiagnosis galat, dan memodifikasi adegan secara instan.
+
+---
+
+## 🏛️ Arsitektur Sistem Engine
+
+Vortex3D dirancang menggunakan prinsip modularitas tinggi dengan pola arsitektur **MVVM (Model-View-ViewModel)** dan **Entity-Component-System (ECS)** ringan:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                   VORTEX3D ENGINE ARCHITECTURE                          │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│                                 PRESENTATION LAYER (UI)                                 │
+│    ProjectHubScreen  │  LandscapeStudioScreen  │  Viewport3D  │  PlayModeOverlay        │
+│    HierarchyView     │  InspectorView          │  LuaEditor   │  ShaderEditor           │
+│    FileManagerView   │  ConsoleLogView         │  AiPrompt    │  DocumentationView      │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│                             STATE & ORCHESTRATION LAYER                                 │
+│                 EngineViewModel (Central Reactive StateFlows & Coroutines)              │
+├─────────────────────────────────────────────────────────────────────────────────────────┤
+│                                 CORE ENGINE SUBSYSTEMS                                  │
+│  ┌───────────────────────┐  ┌───────────────────────┐  ┌─────────────────────────────┐  │
+│  │   Scene Graph & ECS   │  │    Physics Engine     │  │      3D Canvas Pipeline     │  │
+│  │  - Scene / Entity     │  │  - RigidBody Solver   │  │  - Camera3D (Orbit/Pan/Zoom)│  │
+│  │  - Component System   │  │  - CollisionDetector  │  │  - Backface Culling         │  │
+│  │  - Transform/Mat4/Vec3│  │  - Contact Resolution │  │  - Depth Sorting & Shading  │  │
+│  └───────────────────────┘  └───────────────────────┘  └─────────────────────────────┘  │
+│  ┌───────────────────────┐  ┌───────────────────────┐  ┌─────────────────────────────┐  │
+│  │ Lua Scripting Runtime │  │  GLB & Asset Pipeline │  │  Audio & AI Co-Pilot        │  │
+│  │  - LuaInterpreter     │  │  - GlbParser (Binary) │  │  - AudioSynthesizer (PCM)   │  │
+│  │  - EngineCallbacks    │  │  - AssetManager       │  │  - GeminiEngineAssistant    │  │
+│  │  - Virtual InputState │  │  - Material & Shaders │  │  - OkHttp3 REST Client      │  │
+│  └───────────────────────┘  └───────────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Subsistem Matematika 3D (`com.example.engine.math`)
+* **`Vec3`**: Representasi vektor 3 dimensi dengan operasi lengkap (penjumlahan, pengurangan, perkalian skalar, perkalian silang *cross product*, perkalian titik *dot product*, normalisasi, dan perhitungan jarak).
+* **`Mat4`**: Matriks transformasi $4 \times 4$ untuk komputasi translasi, rotasi sudut Euler, skala, matriks pandangan kamera (*lookAt*), dan proyeksi perspektif (*perspective*).
+* **`Ray` & `MathUtils`**: Komputasi sinar untuk interaksi *raycasting* serta utilitas konversi derajat ke radian.
+
+### 2. Subsistem Model & Scene Graph (`com.example.engine.model`)
+* **`Scene`**: Wadah kontainer utama yang memuat daftar seluruh entitas, konfigurasi warna langit (*sky color*), pencahayaan ambien, arah cahaya matahari (*directional light*), serta vektor gravitasi dunia.
+* **`Entity`**: Objek dalam dunia 3D yang memiliki identitas unik (`id`, `name`) dan kumpulan komponen modular.
+* **`Component`**:
+  * `TransformComponent`: Menyimpan posisi, rotasi Euler, skala, dan menghasilkan matriks dunia lokal (`getLocalMatrix()`).
+  * `MeshRendererComponent`: Menghubungkan ID mesh geometri dan material visual.
+  * `RigidBodyComponent`: Menyimpan massa, parameter pantulan (*restitution*), gesekan (*friction*), status statis/dinamis, kecepatan linier, kecepatan sudut, dan bentuk batas tumbukan (*collider shape*).
+  * `LightComponent`: Sumber pencahayaan tipe `DIRECTIONAL`, `POINT`, atau `SPOT`.
+  * `LuaScriptComponent`: Menautkan skrip logika pemrograman ke entitas.
+  * `CameraComponent`: Parameter kamera perspektif (FOV, near plane, far plane).
+
+### 3. Subsistem Simulasi Fisika (`com.example.engine.physics`)
+* **`PhysicsEngine`**: Solver fisika rigid body real-time yang menjalankan integrasi gravitasi Euler semi-implisit, peredaman gesekan udara (*air damping*), deteksi tumbukan bidang lantai ($Y=0$), serta resolusi impuls momentum antar objek.
+* **`Collider` & `CollisionDetector`**: Algoritma uji irisan geometri antara *Sphere-Sphere*, *Sphere-Box*, *Box-Box*, dan *Sphere/Box-Plane* yang menghasilkan titik kontak normal dan kedalaman penetrasi (*penetration depth*).
+
+### 4. Subsistem Rendering 3D (`com.example.engine.renderer`)
+* **`Camera3D`**: Sistem kamera 3D bola (*spherical turntable camera*) yang mendukung rotasi orbit sudut elevasi dan azimuth, pergeseran lateral (*panning*), pembesaran jarak (*zoom*), serta preset sudut pandang ortogonal (Depan, Atas, Samping, Isometrik).
+* **`EngineRenderer`**: Pipeline rendering teroptimasi dengan:
+  * Pengalokasian buffer simpul dinamis tanpa *garbage collection spike*.
+  * *Backface Culling* untuk mengabaikan segitiga yang membelakangi kamera.
+  * *Painter's Depth Sorting* untuk mengurutkan segitiga dari belakang ke depan.
+  * Shading dinamis dengan interpolasi normal pencahayaan Lambertian dan Blinn-Phong.
+  * Pelacakan FPS nyata dan latensi frame milidetik menggunakan rata-rata bergerak (*moving average*).
+
+### 5. Subsistem Scripting Lua (`com.example.engine.lua`)
+* **`LuaInterpreter`**: Virtual machine interpretasi skrip yang mengeksekusi fungsi siklus hidup:
+  * `init()`: Inisialisasi awal entitas saat dibuat.
+  * `update(dt)`: Pembaruan logika setiap frame dengan parameter delta-time.
+  * `on_collision(other)`: Penanganan event tabrakan fisika.
+* Menyediakan jembatan API native untuk membaca kontrol input joystick virtual, memanipulasi posisi/rotasi entitas, menerapkan gaya fisika, memutar audio, dan mencetak log ke konsol.
+
+### 6. Subsistem Aset & Glb Parser (`com.example.engine.model.GlbParser`)
+* Pengurai mandiri biner **glTF 2.0 (`.glb`)** yang membaca struktur header, mengurai chunk JSON metadata, membaca chunk biner BIN (posisi simpul, normal, koordinat UV, dan indeks elemen), serta mengekstrak parameter PBR material (*base color*, *roughness*, *metallic*).
+* Menghitung statistik poligon dan memberikan rekomendasi peran aset (*Karakter TPP*, *Terrain/Ground*, atau *Props*).
+
+### 7. Subsistem Audio Sintesis (`com.example.engine.assets.AudioSynthesizer`)
+* Pembangkit audio prosedural berbasis `AudioTrack` pada laju sampel 22.050 Hz PCM 16-bit. Mampu menghasilkan efek suara sintetis (*jump*, *impact*, *laser*, *explosion*, *coin*) secara real-time tanpa memerlukan file audio eksternal.
+
+### 8. Subsistem AI Co-Pilot (`com.example.engine.ai.GeminiEngineAssistant`)
+* Integrasi asisten AI menggunakan model **Gemini 3.1 Pro Preview** yang dioptimalkan untuk memprogram skrip Lua game yang aman, memperbaiki bug kode secara otomatis, dan merekonstruksi scene berdasarkan bahasa alami pengguna.
+
+---
+
+## 📁 Struktur Direktori Proyek
 
 ```text
 Vortex3D/
 ├── .github/
 │   └── workflows/
-│       └── main.yml           # Pipeline CI/CD GitHub Actions (Auto-Heal, Build, Sign, Validate)
+│       └── main.yml           # Pipeline CI/CD GitHub Actions (Auto-Build, Sign, ARM64 Validate)
 ├── app/
 │   ├── src/
 │   │   ├── main/
 │   │   │   ├── AndroidManifest.xml
 │   │   │   ├── java/com/example/
-│   │   │   │   ├── MainActivity.kt          # Entry point aplikasi & orkestrator mode layar
+│   │   │   │   ├── MainActivity.kt          # Entry point aplikasi & pengatur layar penuh (Immersive)
 │   │   │   │   ├── engine/
-│   │   │   │   │   ├── ai/                  # Integrasi AI Co-Pilot (Scene, Script, Shader Synthesis)
-│   │   │   │   │   ├── assets/              # Manajemen aset 3D, material, tekstur, & shader
-│   │   │   │   │   ├── lua/                 # Interpreter & Sandbox Runtime Lua Scripting
-│   │   │   │   │   ├── math/                # Vector3D, Matrix4x4, Quaternion, & Raycast 3D
-│   │   │   │   │   ├── model/               # Node3D, Scene Graph, Mesh Primitives, Kamera, Lampu
-│   │   │   │   │   ├── physics/             # Simulasi rigid body, gravitasi, collision & impuls
-│   │   │   │   │   ├── renderer/            # Viewport 3D Canvas Pipeline & Shading
-│   │   │   │   │   └── storage/             # Serialisasi JSON proyek, eksportir & importir scene
+│   │   │   │   │   ├── ai/                  # Integrasi AI Co-Pilot (GeminiEngineAssistant)
+│   │   │   │   │   ├── assets/              # AudioSynthesizer prosedural & AssetManager
+│   │   │   │   │   ├── lua/                 # Interpreter, sandbox, & template skrip Lua
+│   │   │   │   │   ├── math/                # Vec3, Mat4, Ray, & utilitas matematika 3D
+│   │   │   │   │   ├── model/               # Scene, Entity, Component, GlbParser, & Shaders
+│   │   │   │   │   ├── physics/             # PhysicsEngine, Collider, & CollisionDetector
+│   │   │   │   │   ├── renderer/            # Camera3D, EngineRenderer, & RenderStats
+│   │   │   │   │   └── storage/             # Serialisasi JSON proyek & manajemen penyimpanan
 │   │   │   │   ├── ui/
-│   │   │   │   │   ├── editor/              # Panel editor Godot-style (ProjectHub, Studio, Hierarchy, dll.)
+│   │   │   │   │   ├── editor/              # Seluruh antarmuka editor Compose (Studio, Hub, Viewport, dll.)
 │   │   │   │   │   └── theme/               # Material 3 Color Schemes, Typography, Shapes
 │   │   │   │   └── viewmodel/
-│   │   │   │       └── EngineViewModel.kt   # State holder terpadu untuk Engine & UI
-│   │   │   └── res/                         # Asset strings, drawables, mipmaps, XML rules
-│   └── build.gradle.kts                     # Konfigurasi modul aplikasi (SDK 36, minSdk 24, arm64)
+│   │   │   │       └── EngineViewModel.kt   # State holder sentral reaktif untuk seluruh aplikasi
+│   │   │   └── res/                         # String resources, launcher icons, drawables, themes
+│   └── build.gradle.kts                     # Konfigurasi Gradle aplikasi (SDK 36, minSdk 24, ARM64)
 ├── gradle/
-│   └── libs.versions.toml                   # Gradle Version Catalog terpusat
-├── keystore/                                # Kunci penandatanganan rilis otomatis
+│   └── libs.versions.toml                   # Version catalog dependensi terpusat
+├── keystore/                                # Kunci penandatanganan rilis APK otomatis
 ├── metadata.json                            # AI Studio Applet Metadata
-└── README.md                                # Dokumentasi ini
+├── PANDUAN_APLIKASI.md                      # Manual lengkap penggunaan dalam aplikasi & source code
+├── PANDUAN_BUILD.md                         # Panduan kompilasi Gradle lokal, penandatanganan & CI/CD
+└── README.md                                # Dokumentasi utama ini
 ```
 
 ---
 
-## 🚀 Fitur Utama & Antarmuka Godot 4 Mobile
+## ⚙️ Spesifikasi Kebutuhan Sistem & Kompatibilitas Perangkat
 
-### 1. Project Hub & Lobby (Godot 4 Inspired)
-- **Manajemen Proyek**: Membuat proyek baru, membuka proyek yang disimpan, atau memilih template siap pakai:
-  - 🎮 *3D First-Person Controller*
-  - 🧪 *Physics & Rigid Body Sandbox*
-  - 🌲 *Low-Poly RPG Landscape*
-  - 🎨 *GLSL Shader Laboratory*
-- **Pengaturan Orientasi Cepat**: Beralih langsung antara mode **Landscape Studio**, **Portrait Mode**, atau **Sensor Auto-Rotate**.
-
-### 2. Dock Panel Collapsible (Studio Mode)
-- **Left Dock**: 
-  - *Hierarchy (Scene Tree)*: Tambahkan Cube, Sphere, Cylinder, Plane, Torus, Directional Light, Point Light, atau Camera.
-  - *File Manager & Asset Browser*: Navigasi file skrip `.lua`, shader `.glsl`, dan mesh `.obj`.
-- **Center Canvas**:
-  - *3D Viewport*: Interaksi sentuh multi-finger (orbit rotasi, panning, zoom kamera pinch-to-zoom).
-  - *Play / Pause Toolbar*: Eksekusi simulasi fisika dan skrip Lua secara langsung di viewport dengan indikator FPS dan delta-time.
-- **Right Dock**:
-  - *Inspector Panel*: Pengaturan Transform (Position, Rotation, Scale), Material (Color, Roughness, Metallic), Physics (Mass, Restitution, Friction, IsKinematic), dan ikatan Skrip Lua.
-- **Bottom Dock**:
-  - *Lua Editor*: Editor kode dengan syntax highlighting, eksekusi runtime, dan template skrip.
-  - *Shader Editor*: Editor vertex & fragment GLSL dengan live compilation check.
-  - *Console Logs*: Output log real-time dari skrip Lua dan sistem engine.
-  - *AI Co-Pilot*: Prompt cerdas untuk menghasilkan skrip game atau memodifikasi scene secara instan.
+| Parameter Sistem | Spesifikasi Minimum | Spesifikasi Rekomendasi |
+| :--- | :--- | :--- |
+| **Sistem Operasi** | Android 7.0 (Nougat, API 24) | Android 10 s/d Android 16 (API 29 - 36) |
+| **Arsitektur CPU** | ARM64 (`arm64-v8a`, 64-bit) | ARM64 modern (Snapdragon, Dimensity, Tensor) |
+| **Memori RAM** | 2 GB RAM | 4 GB RAM ke atas |
+| **Ukuran Layar** | 5.0 inci (Smartphone) | 6.5 inci ke atas atau Tablet 10 inci |
+| **Orientasi Layar** | Landscape atau Portrait | Landscape Studio Mode |
+| **Dukungan Grafis** | OpenGL ES 3.0+ / Android Canvas Pipeline | Perangkat keras dengan akselerasi GPU penuh |
 
 ---
 
-## 🛠️ Panduan Build Lokal & CI/CD
+## 🤖 AI Co-Pilot & Coding Agent Directives
 
-### Prasyarat:
-- **JDK 17** (disarankan OpenJDK 17)
-- **Android SDK** dengan Build Tools `34.0.0` ke atas
-- NDK (opsional, jika mengompilasi biner C/C++)
+> **PANDUAN MUTLAK UNTUK AGENT AI / LLM (Claude, ChatGPT, Gemini, Copilot, Cursor, dll.):**  
+> Saat Anda membaca atau memodifikasi repositori ini, patuhi aturan integritas berikut:
 
-### Perintah Build Terminal:
-
-```bash
-# 1. Bersihkan dan periksa sintaks kode
-./gradlew check
-
-# 2. Build APK Debug untuk pengujian cepat
-./gradlew assembleDebug
-
-# 3. Build Release APK (Strictly ARM64)
-./gradlew assembleRelease
-```
-
-### Pipeline GitHub Actions CI/CD (`.github/workflows/main.yml`):
-Setiap push ke branch utama secara otomatis menjalankan:
-1. **Setup JDK 17 & Android SDK Tools**.
-2. **Auto-Generate Keystore**: Membuat `keystore/release.jks` secara otomatis jika belum ada.
-3. **Auto-Heal & Version Injection**: Menyelaraskan `versionCode` dan `versionName` dengan nomor run CI.
-4. **Compile Release APK**: Menghasilkan biner release khusus `arm64-v8a`.
-5. **Zipalign 4KB Page-Alignment**: Memastikan efisiensi paging memory kernel Android.
-6. **Triple Signature (V1 + V2 + V3)**: Menandatangani APK agar kompatibel dari Android 7/8 hingga Android 15+.
-7. **Verifikasi Biner 64-bit**: Memastikan tidak ada biner 32-bit yang lolos ke rilis.
-8. **Upload Artefak**: File `app-arm64-release.apk` langsung dapat diunduh dari tab *Actions* di GitHub.
-
----
-
-## 💡 Contoh Penggunaan Scripting Lua
-
-Di dalam Vortex3D, Anda dapat menyematkan skrip Lua langsung ke entitas Node3D apa pun:
-
-```lua
--- Contoh: Rotasi otomatis objek dan osilasi posisi
-function on_init()
-    print("Entity Vortex3D dimulai!")
-    self.speed = 45.0 -- derajat per detik
-end
-
-function on_update(dt)
-    -- Rotasi pada sumbu Y
-    self.rotation.y = self.rotation.y + (self.speed * dt)
-    
-    -- Osilasi halus pada sumbu Y
-    self.position.y = math.sin(os.clock() * 2.0) * 1.5
-end
-
-function on_collision(other_entity)
-    print("Tabrakan terdeteksi dengan: " .. other_entity.name)
-end
-```
-
----
-
-## 🗺️ Panduan Setup Game Open-World TPP & Aset GLB
-
-Untuk membangun game open-world dengan kamera Third-Person (TPP), kostum karakter GLB, dan permukaan terrain GLB:
-
-### 1. Struktur Folder Rekomendasi Aset GLB
-Simpan aset 3D Anda di direktori proyek yang terorganisir untuk efisiensi loading:
-- **Kostum Karakter / Hero**: `assets/models/characters/` (Tipe: Dynamic Actor, Mesh + Rig + Collider Kapsul).
-- **Permukaan Dunia / Terrain**: `assets/models/world/terrain/` (Tipe: Static Ground, Mesh + Static Box/Mesh Collider).
-- **Props & Lingkungan**: `assets/models/props/` (Tipe: Interaktif / Dekorasi).
-
-> **Tips Salin Path:** Di File Manager Vortex3D, pilih file `.glb` apa pun untuk melihat detail inspeksi (jumlah simpul, poligon, material, tekstur) lalu tekan tombol **"Salin Path"** untuk menyalin path folder rekomendasi ke clipboard.
-
-### 2. Langkah Setup Karakter & Kostum GLB
-1. Buka **File Manager** (atau tab **Assets** -> **Meshes**).
-2. Pilih file model karakter Anda (`hero.glb` atau `costume.glb`).
-3. Tekan **"Spawn ke Scene 3D"**.
-4. Di panel **Inspector**, pilih entitas karakter tersebut:
-   - Set **RigidBody**: Aktifkan fisika dinamis (`Mass = 1.0`, `IsKinematic = false`).
-   - Set **Collider**: Pilih bentuk `Capsule` atau `Box` penopang kaki karakter.
-   - Di bagian **Lua Script Runtime**, tekan **"+ Attach Script Lua ke Entitas"** lalu pilih template **"TPP Hero / Character Controller"** (`script_hero`).
-5. Karakter kini siap digerakkan menggunakan virtual joystick dan tombol lompat.
-
-### 3. Langkah Setup Permukaan Tanah / Terrain GLB
-1. Impor model permukaan tanah (`terrain.glb` atau `world.glb`) via File Manager.
-2. Tekan **"Spawn ke Scene 3D"**.
-3. Di panel **Inspector**, sesuaikan posisi (`Position Y = 0.0`) dan skala permukaan.
-4. Pasangkan **RigidBody**: Setel ke **Static** (`IsKinematic = true` atau `Mass = 0`) agar permukaan kokoh dan tidak jatuh akibat gravitasi.
-5. (Opsional) Pasang script `script_terrain` untuk memicu efek partikel langkah kaki atau deteksi permukaan tanah saat pemain melangkah.
-
-### 4. Setup Kamera Third-Person (TPP)
-- Kamera 3D di Vortex3D secara otomatis mendukung orbit multi-touch dan mengikuti target fokus entitas aktif.
-- Skrip Lua dapat mengarahkan fokus kamera dengan memanggil callback `camera:set_target(x, y, z)` secara langsung setiap frame.
-
----
-
-## 📋 Fitur Terkini & Ergonomi Studio
-
-- **Salin Cepat Konsol Log & Aksi**:
-  - Tombol **"Salin Semua"** di bilah konsol untuk menyalin seluruh riwayat kejadian engine ke clipboard Android.
-  - Tombol **Salin Baris** (ikon clipboard di sisi kanan tiap baris log) untuk menyalin pesan spesifik.
-  - Filter tag terpadu: *Semua*, *Lua Script*, *Fisika*, *Aksi Engine*, dan *Error*.
-- **Attach Script Lua Dua Arah Langsung**:
-  - Di **Inspector**: Tombol **"+ Attach Script Lua ke Entitas"** dengan dropdown pemilih script, pembuatan script baru dari template, dan tombol *Lepas Script*.
-  - Di **Lua IDE**: Ribbon bar **"Target Entitas"** menampilkan entitas yang sedang aktif dipilih beserta tombol 1-ketukan untuk langsung memasang skrip yang sedang diedit.
-- **Toolbar Mode Landscape Scrollable & Safe-Area**:
-  - Bilah alat atas kini dapat digulir horizontal (`horizontalScroll`) secara fleksibel—tombol tidak akan pernah menciut atau terpotong pada layar HP sempit.
-  - Padding otomatis dari *safeDrawing insets* menghindari notch kamera dan bilah navigasi HP.
-  - Tombol **"Layar Penuh"** terdedikasi untuk menyembunyikan bilah navigasi HP secara instan.
-- **Perbaikan Immersive Mode saat Keyboard Muncul**:
-  - Deteksi penutupan keyboard virtual (IME) secara otomatis memulihkan mode immersive layar penuh tanpa meninggalkan tombol navigasi yang tersangkut.
+1. **Arsitektur Wajib ARM64 (64-bit Only):**  
+   File `app/build.gradle.kts` menetapkan `abiFilters.add("arm64-v8a")`. **DILARANG** menambahkan ABI 32-bit (`armeabi-v7a`, `x86`) agar tidak merusak pipeline kompilasi dan pengujian biner.
+2. **Integritas Penandatanganan & Signing Configs:**  
+   **JANGAN PERNAH** menghapus atau mengubah konfigurasi `signingConfigs` (`release` dan `debugConfig`) di `app/build.gradle.kts`. Build otomatis dan platform AI Studio mengandalkan penandatanganan ini.
+3. **Kompatibilitas Versi SDK:**  
+   Pertahankan `minSdk = 24` dan `compileSdk = 36` / `targetSdk = 36`. Pastikan backward-compatibility tetap terjaga untuk perangkat Android 8.0/8.1 Oreo (API 26/27).
+4. **UI & Desain Sistem:**  
+   Semua antarmuka pengguna dibangun menggunakan **Jetpack Compose Material 3 (M3)**. Jangan membuat layout XML baru kecuali untuk drawable asset.
+5. **Konvensi Kode & Penamaan:**  
+   Bahasa pemrograman utama adalah **Kotlin**. Gunakan Kotlin Coroutines dan StateFlow untuk reaktivitas data. Pertahankan `Modifier.testTag("snake_case_name")` pada tombol dan elemen interaktif untuk kemudahan uji otomatis.
 
 ---
 
 ## 📄 Lisensi & Kontribusi
 
-Proyek ini dibangun untuk komunitas pengembang game seluler independen dan eksperimen AI kreatif. Bebas digunakan, dimodifikasi, dan dikembangkan lebih lanjut.
+Vortex3D dikembangkan sebagai game engine terbuka untuk memberdayakan komunitas pengembang game seluler independen, pelajar, dan kreator konten interaktif. 
 
-Untuk berkontribusi, silakan buat *Pull Request* atau ajukan *Issue* di repositori resmi! 🚀
+Jika Anda ingin berkontribusi, silakan buat *Pull Request* atau ajukan *Issue* baru pada repositori resmi:
+- Laporkan bug atau perbaikan performa pada pelacak isu.
+- Ajukan fitur baru atau template game baru melalui pull request.
 
+Selamat berkarya dan menciptakan dunia 3D impian Anda langsung dari genggaman tangan! 🚀
