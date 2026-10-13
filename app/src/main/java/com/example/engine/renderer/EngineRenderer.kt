@@ -22,7 +22,8 @@ data class RenderStats(
     val drawCalls: Int = 0,
     val trianglesDrawn: Int = 0,
     val verticesProcessed: Int = 0,
-    val fps: Int = 60
+    val fps: Int = 60,
+    val frameTimeMs: Float = 0f
 )
 
 class RenderableTriangle {
@@ -51,6 +52,13 @@ object EngineRenderer {
     private val linePointsScratch = FloatArray(4)
     private val gizmoScratch = FloatArray(8)
 
+    // Real Frame-Time & FPS Tracking (rolling window)
+    private var lastFrameTimeNano: Long = 0L
+    private val frameDeltas = FloatArray(16) { 16.6f }
+    private var frameDeltaIndex = 0
+    private var measuredFps: Int = 60
+    private var measuredFrameTimeMs: Float = 16.6f
+
     private fun ensureVertexCapacity(requiredVertices: Int) {
         val requiredSize = requiredVertices * VERTEX_STRIDE
         if (vertexBuffer.size < requiredSize) {
@@ -77,6 +85,26 @@ object EngineRenderer {
         timeSeconds: Float,
         renderWireframeOnly: Boolean = false
     ): RenderStats {
+        val renderStartNano = System.nanoTime()
+
+        // Track frame delta and calculate genuine FPS with moving average
+        if (lastFrameTimeNano != 0L) {
+            val deltaNano = renderStartNano - lastFrameTimeNano
+            val deltaMs = deltaNano / 1_000_000f
+            if (deltaMs in 1.0f..350.0f) {
+                frameDeltas[frameDeltaIndex] = deltaMs
+                frameDeltaIndex = (frameDeltaIndex + 1) % frameDeltas.size
+                var sum = 0f
+                for (d in frameDeltas) sum += d
+                val avgMs = sum / frameDeltas.size
+                measuredFrameTimeMs = avgMs
+                if (avgMs > 0.01f) {
+                    measuredFps = (1000f / avgMs).toInt().coerceIn(1, 120)
+                }
+            }
+        }
+        lastFrameTimeNano = renderStartNano
+
         val width = drawScope.size.width
         val height = drawScope.size.height
         if (width <= 0f || height <= 0f) return RenderStats()
@@ -213,7 +241,7 @@ object EngineRenderer {
                 val edge2Y = p2Y - p0Y
                 val cross = edge1X * edge2Y - edge1Y * edge2X
 
-                if (!material.isDoubleSided && cross >= 0f) {
+                if (!material.isDoubleSided && !material.isWireframe && !renderWireframeOnly && cross >= 0f) {
                     continue
                 }
 
@@ -293,11 +321,14 @@ object EngineRenderer {
             }
         }
 
+        val renderDurationMs = (System.nanoTime() - renderStartNano) / 1_000_000f
+
         return RenderStats(
             drawCalls = drawCalls,
             trianglesDrawn = totalTriangles,
             verticesProcessed = totalVertices,
-            fps = 60
+            fps = measuredFps,
+            frameTimeMs = renderDurationMs
         )
     }
 

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -28,6 +29,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -35,6 +38,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.AlertDialog
@@ -42,6 +46,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,11 +63,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.engine.storage.FileItem
@@ -84,6 +92,8 @@ fun FileManagerView(
     var selectedFileForAction by remember { mutableStateOf<FileItem?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var showFullScreenPicker by remember { mutableStateOf(false) }
+    var isSearchExpanded by remember { mutableStateOf(false) }
+    var showLocationsMenu by remember { mutableStateOf(false) }
 
     // Android 7-10 permission launcher
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
@@ -111,77 +121,208 @@ fun FileManagerView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0D1117))
-            .padding(8.dp)
+            .padding(6.dp)
     ) {
-        // Fullscreen Mode Banner Button (Solves cramped selection space)
+        // Compact Single-Row Toolbar (Conserves 80%+ vertical screen space)
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 6.dp)
-                .clickable { showFullScreenPicker = true }
-                .testTag("open_fullscreen_picker_banner"),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF172433)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.6f)),
+                .padding(bottom = 4.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
             shape = RoundedCornerShape(8.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.OpenInFull,
-                    contentDescription = null,
-                    tint = Color(0xFF00E5FF),
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Mode Layar Penuh",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF00E5FF)
-                    )
-                    Text(
-                        text = "Pilih file & model 3D di area luas",
-                        fontSize = 10.sp,
-                        color = Color(0xFF8B949E)
+                // Back to parent folder
+                IconButton(
+                    onClick = {
+                        val parent = currentDir.parentFile
+                        if (parent != null && parent.canRead()) {
+                            currentDir = parent
+                        }
+                    },
+                    enabled = currentDir.parentFile != null && currentDir.parentFile?.canRead() == true,
+                    modifier = Modifier.size(32.dp).testTag("file_manager_back_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Naik ke Folder Induk",
+                        tint = if (currentDir.parentFile != null) Color(0xFF00E5FF) else Color(0xFF6E7681),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
-                Icon(
-                    imageVector = Icons.Default.Fullscreen,
-                    contentDescription = "Expand",
-                    tint = Color(0xFF00E5FF),
-                    modifier = Modifier.size(18.dp)
-                )
+
+                // Current folder badge / quick jump button
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable { showLocationsMenu = !showLocationsMenu }
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = Color(0xFFFFB300),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = currentDir.name.ifEmpty { "Penyimpanan" },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF0F6FC),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Pilih Lokasi",
+                            tint = Color(0xFF8B949E),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showLocationsMenu,
+                        onDismissRequest = { showLocationsMenu = false },
+                        modifier = Modifier.background(Color(0xFF161B22))
+                    ) {
+                        StorageManager.getQuickLocations(context).forEach { (label, dir) ->
+                            DropdownMenuItem(
+                                text = { Text(label, fontSize = 11.sp, color = Color.White) },
+                                onClick = {
+                                    currentDir = dir
+                                    showLocationsMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Search & Filter Toggle Button
+                IconButton(
+                    onClick = { isSearchExpanded = !isSearchExpanded },
+                    modifier = Modifier.size(30.dp).testTag("toggle_search_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Cari",
+                        tint = if (isSearchExpanded || searchQuery.isNotEmpty()) Color(0xFF00E5FF) else Color(0xFF8B949E),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Create folder button
+                IconButton(
+                    onClick = { showCreateFolderDialog = true },
+                    modifier = Modifier.size(30.dp).testTag("create_folder_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CreateNewFolder,
+                        contentDescription = "Buat Folder",
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Fullscreen Picker Button
+                IconButton(
+                    onClick = { showFullScreenPicker = true },
+                    modifier = Modifier.size(30.dp).testTag("open_fullscreen_picker_banner")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fullscreen,
+                        contentDescription = "Mode Layar Penuh",
+                        tint = Color(0xFF00E5FF),
+                        modifier = Modifier.size(19.dp)
+                    )
+                }
+
+                // Refresh Button
+                IconButton(
+                    onClick = { refreshFiles() },
+                    modifier = Modifier.size(30.dp).testTag("refresh_files_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Muat Ulang",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
 
-        // Permission Request Banner if not granted
+        // Collapsible Search / Quick Path Bar
+        AnimatedVisibility(visible = isSearchExpanded) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF131822)),
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Column(modifier = Modifier.padding(6.dp)) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Ketik nama file atau ekstensi (.glb)...", fontSize = 11.sp) },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF8B949E), modifier = Modifier.size(16.dp))
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color(0xFF8B949E), modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .testTag("file_search_input")
+                    )
+
+                    // Path indicator
+                    Text(
+                        text = currentDir.absolutePath,
+                        fontSize = 10.sp,
+                        color = Color(0xFF6E7681),
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp, start = 2.dp)
+                    )
+                }
+            }
+        }
+
+        // Compact Storage Permission Request Banner if not granted
         if (!hasPermission) {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp)
+                    .padding(bottom = 4.dp)
                     .testTag("storage_permission_card"),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1C14)),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(6.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(10.dp),
+                    modifier = Modifier.padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Izin Penyimpanan Internal", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFFFB300))
-                        Text(
-                            "Diperlukan untuk membaca file .glb, membuat folder, dan menyimpan proyek.",
-                            fontSize = 11.sp,
-                            color = Color(0xFFD7CCC8)
-                        )
+                        Text("Izin Berkas Diperlukan", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFFFB300))
+                        Text("Untuk membaca .glb & simpan proyek.", fontSize = 10.sp, color = Color(0xFFD7CCC8))
                     }
                     Button(
                         onClick = {
@@ -197,112 +338,14 @@ fun FileManagerView(
                                 )
                             }
                         },
-                        modifier = Modifier.testTag("grant_storage_button")
+                        modifier = Modifier.testTag("grant_storage_button"),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
-                        Text("Izinkan", fontSize = 11.sp)
+                        Text("Izinkan", fontSize = 10.sp)
                     }
                 }
             }
         }
-
-        // Header & Quick Bookmarks
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "File Manager",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFF0F6FC)
-            )
-
-            Row {
-                IconButton(onClick = { showFullScreenPicker = true }, modifier = Modifier.size(30.dp).testTag("header_fullscreen_button")) {
-                    Icon(Icons.Default.Fullscreen, contentDescription = "Layar Penuh", tint = Color(0xFF00E5FF), modifier = Modifier.size(19.dp))
-                }
-                IconButton(onClick = { showCreateFolderDialog = true }, modifier = Modifier.size(30.dp)) {
-                    Icon(Icons.Default.CreateNewFolder, contentDescription = "Buat Folder", tint = Color(0xFF00E5FF), modifier = Modifier.size(18.dp))
-                }
-                IconButton(onClick = { refreshFiles() }, modifier = Modifier.size(30.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Muat Ulang", tint = Color.White, modifier = Modifier.size(18.dp))
-                }
-            }
-        }
-
-        // Quick Bookmark Locations
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            StorageManager.getQuickLocations(context).forEach { (label, dir) ->
-                SuggestionChip(
-                    onClick = { currentDir = dir },
-                    label = { Text(label, fontSize = 11.sp) }
-                )
-            }
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Breadcrumb Path Bar with Up Navigation
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-            shape = RoundedCornerShape(6.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = {
-                        val parent = currentDir.parentFile
-                        if (parent != null && parent.canRead()) {
-                            currentDir = parent
-                        }
-                    },
-                    enabled = currentDir.parentFile != null && currentDir.parentFile?.canRead() == true,
-                    modifier = Modifier.size(28.dp).testTag("file_manager_back_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Naik ke Folder Induk",
-                        tint = if (currentDir.parentFile != null) Color(0xFF00E5FF) else Color(0xFF6E7681),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-
-                Spacer(Modifier.width(4.dp))
-
-                Text(
-                    text = currentDir.absolutePath,
-                    fontSize = 11.sp,
-                    color = Color(0xFF8B949E),
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Search Bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Cari file di folder ini...", fontSize = 11.sp) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().height(46.dp).testTag("file_search_input")
-        )
-
-        Spacer(Modifier.height(6.dp))
 
         // File & Directory List
         val filtered = remember(fileItems, searchQuery) {

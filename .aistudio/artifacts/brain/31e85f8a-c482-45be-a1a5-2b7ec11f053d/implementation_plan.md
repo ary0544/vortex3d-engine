@@ -1,98 +1,89 @@
-# Rencana Optimasi Performa 3D Viewport & Redesain UI File Manager
+# Rencana Perbaikan: Optimasi Viewport 3D, Real FPS Statistic, & Redesain File Manager Landscape
 
-Solusi menyeluruh untuk mengatasi keluhan lag/lambat pada render 3D viewport, memperluas area pemilihan file dengan Dialog Pop-up Layar Penuh (menghilangkan kendala celah pemilihan yang sempit), serta merapikan header tab dock kiri dan kanan dengan ikon ringkas tanpa teks terpotong.
+Rencana komprehensif untuk mengatasi masalah viewport lambat/stuttering pada pergerakan kamera, mengganti metrik FPS palsu dengan pengukuran frame time nyata, serta merombak layout File Manager agar area daftar file luas dan nyaman digulir pada orientasi landscape.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Keputusan yang dikonfirmasi oleh pengguna:
-> - **File Manager / Pemilihan File**: Menghadirkan **Dialog Pop-up Layar Penuh** khusus untuk penjelajahan dan pemilihan file (.glb, .obj, .lua, audio, shaders) dengan layout kartu yang lega, preview jelas, dan tombol aksi yang nyaman disentuh.
-> - **Optimasi Performa**: Memprioritaskan **Render 3D Viewport dan Respon Sentuhan Orbit Kamera** dengan mengeliminasi alokasi objek per-frame (zero-allocation rendering buffer), mengurangi recomposition berlebih saat dragging, serta memperhalus render loop.
-> - **Penataan Tab Dock**: Menggunakan **Tab Ikon Ringkas Berlebar Fleksibel** pada dock kiri dan kanan, mencegah teks terpotong dan menjaga tampilan tetap rapi serta simetris.
+> Berdasarkan masukan dan konfirmasi Anda:
+> - **File Manager Landscape**: Menghapus tumpukan 4 baris header yang memakan 70% tinggi layar ponsel. Menggantinya dengan **toolbar kompak 1 baris** yang memuat breadcrumb, aksi cepat, dan tombol toggle lipat (collapsible) untuk bilah cari/filter. Dengan ini, area daftar file mendapatkan lebih dari 75% tinggi layar sehingga leluasa dan tidak sempit lagi saat di-scroll.
+> - **Statistik FPS Nyata & Latency**: Menghapus angka hardcoded `fps = 60` yang tidak akurat. Mengimplementasikan kalkulator FPS rolling-average berbasis `System.nanoTime()` yang mengukur waktu render frame sebenarnya (menampilkan FPS nyata dan durasi render dalam milidetik, misal `59 FPS • 16.8 ms`).
+> - **Optimasi Pipeline 3D (Backface Culling)**: Mengaktifkan culling segitiga 2D di ruang layar (*screen-space winding check*). Segitiga yang membelakangi kamera diabaikan sebelum tahap kalkulasi pencahayaan, depth-sorting, dan canvas path drawing—mengurangi beban CPU dan memori hingga ~50%.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **Tujuan**: Mengubah pengalaman editor mobile Vortex3D menjadi responsif (60 FPS stabil tanpa stuttering saat orbit kamera) dan nyaman digunakan untuk manipulasi file serta navigasi tab.
-- **Masalah Pengguna Saat Ini**:
-  1. Area daftar file pada tab file manager dock terlalu sempit dan terhimpit oleh search bar & tombol preset, menyulitkan pengguna menyentuh file yang diinginkan.
-  2. Perputaran kamera 3D terasa berat dan lambat akibat alokasi memori ribuan objek per detik dalam loop Canvas rendering.
-  3. Label pada tab dock kanan dan tombol aksi asset manager mengalami pemotongan teks akibat lebar kontainer dock yang terbatas.
+- **Masalah Saat Ini**:
+  1. Header File Manager menumpuk vertikal (Judul + Baris Shortcut + Breadcrumb + Input Search + Kategori Filter) sehingga pada layar HP landscape (tinggi ~360-400dp), hanya tersisa ~80-100dp untuk daftar file (hanya terlihat 1-1.5 baris file).
+  2. Angka `fps = 60` pada statistik renderer bersifat statis (hardcoded), sehingga pengguna tidak mendapatkan informasi performa yang valid.
+  3. Canvas software rendering memproses, mengurutkan (*depth-sorting*), dan menggambar seluruh poligon termasuk sisi belakang objek yang tidak terlihat, memicu penurunan fluiditas saat kamera digeser.
+- **Solusi yang Dibangun**:
+  - **File Manager Collapsible Single-Row**: Toolbar ringkas dan adaptif dengan tombol toggle pencarian/filter opsional, memaksimalkan tinggi kontainer daftar file.
+  - **Real FPS Engine**: Stopwatch frame-to-frame dengan perataan bergerak (rolling buffer 20 frame) untuk menghitung FPS riil dan frame time ms yang jujur.
+  - **Screen-Space Backface Culling & Event Smoothing**: Melewati pemrosesan poligon yang tidak menghadap ke depan layar pada objek solid.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-### 1. Dialog Pemilihan File Layar Penuh (Full-Screen File Picker Modal)
-- **Akses Langsung**: Tombol mencolok *"Buka File Manager Layar Penuh"* pada dock kiri dan header Asset Manager.
-- **Header Modal**:
-  - Tombol Kembali / Navigasi Folder Induk yang jelas (`40dp` touch target).
-  - Breadcrumb path aktif (contoh: `/storage/emulated/0/Download`).
-  - Bar pencarian terintegrasi dengan aksi clear filter.
-  - Tombol Tutup dialog yang mudah diakses.
-- **Area Daftar File Luas & Nyaman**:
-  - Tampilan kartu file modern dengan tinggi nyaman (`64dp`), ikon format berwarna (GLB: Cyan, LUA: Kuning, Audio: Oranye, Shaders: Hijau).
-  - Informasi ukuran file dan tanggal modifikasi yang terbaca jelas.
-  - Tombol aksi instan: *"Spawn ke Scene"*, *"Impor ke Assets"*, dan *"Buka Editor"*.
-
-### 2. Tab Ikon Ringkas Dock Kiri & Kanan (Anti Teks Terpotong)
-- **Left Dock Tabs (Scene, Assets, Files)**:
-  - Tab ringkas dengan ikon proporsional (`18dp`) dan label fleksibel auto-fit.
-  - Perbaikan tombol `+ Impor .GLB` pada header Asset Manager agar tidak terpotong (menggunakan ikon tambah ringkas dan teks fleksibel).
-- **Right Dock Tabs (Inspector, Lua, Shaders, AI Fix, Docs)**:
-  - Tab bergaya compact pill indicator dengan ikon representatif dan label ringkas tanpa min-width berlebih, sehingga seluruh tab muat rapi tanpa terpotong.
-
-### 3. Responsivitas 3D Viewport & Gesture Orbit
-- **Zero-Allocation Render Pipeline**:
-  - Pre-alokasi static buffer untuk proyeksi verteks dan segitiga di `EngineRenderer.kt` guna menghindari garbage collection freeze saat mengorbit kamera.
-  - Throttling dan penyatuan state pembaruan kamera untuk mencegah recomposition Compose yang tidak perlu pada overlay UI.
-  - Respon sentuhan drag orbit yang instan, mulus, dan presisi.
+### Alur Interaksi Pengguna (User Flow)
+1. **Navigasi File yang Lega di Mode Landscape**:
+   - Saat membuka dock "Files" maupun dialog "File Explorer & Asset Importer", pengguna langsung melihat daftar file yang luas (bisa menampilkan 5-7 item sekaligus tanpa terhimpit).
+   - Jalur folder (breadcrumb) diringkas secara elegan dengan tombol kembali cepat.
+   - Bilah pencarian dan filter tipe file dapat dimunculkan/disembunyikan hanya saat dibutuhkan melalui tombol ikon praktis.
+2. **Indikator Statistik Jujur & Informatif**:
+   - Badge performa di sudut kanan atas menampilkan:
+     - `FPS Nyata` (berwarna hijau jika >= 50 FPS, kuning jika 30-49 FPS, oranye jika < 30 FPS).
+     - `Frame Time` (misal `16.4 ms`).
+     - `Jumlah Tris Aktif` (menampilkan jumlah segitiga yang benar-benar digambar setelah proses culling).
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Full-Screen Dialog vs Narrow Dock File List**:
-  - *Pendekatan*: Menampilkan dialog modal layar penuh ketika pengguna ingin memilih atau mengimpor file. Dock kiri tetap memiliki pratinjau cepat, namun aksi pemilihan utama dilakukan di layar penuh dengan ruang sentuh maksimal.
-  - *Alasan*: Layar mobile landscape memiliki keterbatasan tinggi vertikal pada dock samping. Layar penuh memberikan 100% ruang pandang untuk melihat nama file panjang dan detail metadata.
-- **Reusable Primitive Buffers vs Per-Frame Object Instantiation**:
-  - *Pendekatan*: Menggunakan array primitif reusable (`FloatArray`) untuk transformasi 3D dan proyeksi layar alih-alih membuat ribuan objek data class per frame.
-  - *Alasan*: Mengeliminasi pemicu GC (Garbage Collection) Android yang menjadi penyebab utama keluhan "masih sangat lambat".
+- **Desain Header File Manager: Collapsible Toolbar vs Fixed Multi-Row**:
+  - *Keputusan*: Menggabungkan breadcrumb, shortcut penting, dan tombol expand filter ke dalam satu baris horizontal kompak (`height = 36.dp`). Filter chip dan input search hanya muncul saat ditekan atau digulir.
+  - *Manfaat*: Menambah area pandang daftar file dari semula ~30% menjadi ~80% dari total tinggi layar.
+- **Backface Culling pada Software Renderer**:
+  - *Keputusan*: Menghitung tanda *cross-product* determinan 2D dari titik `(p0, p1, p2)` di layar:
+    `val cross = (p1X - p0X) * (p2Y - p0Y) - (p1Y - p0Y) * (p2X - p0X)`
+    Jika `cross <= 0f` pada material solid, segitiga langsung diabaikan. Untuk mode wireframe, kedua sisi tetap digambar.
+  - *Manfaat*: Menghilangkan pemborosan alokasi, sorting, dan path drawing untuk 50% segitiga pada kubus, bola, silinder, dan model 3D lainnya.
 
 ---
 
-## 4. Technical Architecture & Component Flow
+## 4. Technical Architecture & Implementation Steps
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                    LandscapeStudioScreen                      │
-│   ┌─────────────────────┬───────────────────────┬──────────┐  │
-│   │   Left Dock         │      Viewport3D       │Right Dock│  │
-│   │ [Scene|Assets|Files]│  (Zero-GC 3D Orbit)   │[Insp|Lua]│  │
-│   │                     │                       │          │  │
-│   │  Quick Asset Hub    │  Fast Touch Response  │Inspector │  │
-│   └──────────┬──────────┴───────────────────────┴──────────┘  │
-│              │                                                │
-│              ▼ Klik "Pilih File"                              │
-│   ┌────────────────────────────────────────────────────────┐  │
-│   │        FullScreenFilePickerDialog (Layar Penuh)        │  │
-│   │  • Breadcrumb Path & Search Bar Nyaman                 │  │
-│   │  • List Card Luas (Touch target 64dp, no squishing)    │  │
-│   │  • Aksi Langsung: Spawn 3D / Import Asset / Edit       │  │
-│   └────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                 EngineRenderer (Optimized)                  │
+│                                                             │
+│   Project Vertices (Mat4 Transformation)                    │
+│   ▼                                                         │
+│   Screen-Space Backface Culling Check (cross <= 0)          │
+│   ├─ True (Backfacing & Solid) ──► DISCARD (Skip shading,   │
+│   │                                pooling, & sorting)      │
+│   └─ False (Visible / Front)   ──► Shading & Pool           │
+│   ▼                                                         │
+│   Painter's Algorithm Depth Sort (Hanya 50% Segitiga)       │
+│   ▼                                                         │
+│   Real Frame Time & FPS Calculation (System.nanoTime())     │
+└─────────────────────────────────────────────────────────────┘
+                               ▲
+┌──────────────────────────────┴──────────────────────────────┐
+│                    FileManagerView & Dialog                 │
+│  - Single-row Compact Header with Collapsible Search/Filter │
+│  - Maximized LazyColumn Scroll Area                         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Rencana Langkah Perubahan Kode:
-1. **`FullScreenFilePickerDialog.kt` & `FileManagerView.kt`**:
-   - Membuat komponen dialog layar penuh khusus untuk penjelajahan dan pemilihan file dengan touch target lega dan aksi jelas.
-   - Mengintegrasikan dialog ini pada tab Files dan tombol impor Asset Manager.
-2. **`EngineRenderer.kt` & `Viewport3D.kt`**:
-   - Mengganti alokasi per-frame dengan reusable float buffer untuk verteks, normal, dan segitiga terproyeksi.
-   - Mengoptimalkan gesture `pointerInput` drag orbit kamera agar rendering instan tanpa stuttering GC.
-3. **`LandscapeStudioScreen.kt` & `AssetBrowserView.kt`**:
-   - Menata ulang tab header dock kiri dan kanan menjadi tab ikon fleksibel yang tidak memotong teks.
-   - Merapikan header Asset Manager agar tombol impor tidak terdesak.
-4. **Verifikasi & Build**:
-   - Menjalankan `compile_applet` untuk memastikan seluruh komponen terbangun dengan sempurna tanpa error.
+1. **`EngineRenderer.kt`**:
+   - Tambahkan 2D Backface Culling pada loop segitiga.
+   - Tambahkan tracking frame start/end time dan rolling average FPS & frame latency.
+2. **`EngineViewModel.kt`**:
+   - Perbarui model `RenderStats` untuk menyertakan `frameTimeMs: Float`.
+3. **`Viewport3D.kt`**:
+   - Perbarui `RenderStatsBadge` untuk menampilkan FPS riil dan frame latency milidetik secara estetik.
+4. **`FileManagerView.kt` & `FullScreenFilePickerDialog.kt`**:
+   - Restrukturisasi header menjadi baris tunggal yang ramping dengan expand/collapse toggle untuk search dan filter, memperluas area scroll file.

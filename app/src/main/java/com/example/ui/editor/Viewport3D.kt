@@ -472,9 +472,15 @@ fun RenderStatsBadge(
     modifier: Modifier = Modifier
 ) {
     val stats by viewModel.renderStats.collectAsState()
+    val fpsColor = when {
+        stats.fps >= 50 -> Color(0xFF00E676)
+        stats.fps >= 30 -> Color(0xFFFFEE58)
+        else -> Color(0xFFFF7043)
+    }
+
     Card(
-        modifier = modifier.padding(8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xAA0D1117)),
+        modifier = modifier.padding(6.dp).testTag("render_stats_badge"),
+        colors = CardDefaults.cardColors(containerColor = Color(0xCC0D1117)),
         shape = RoundedCornerShape(8.dp)
     ) {
         Row(
@@ -483,20 +489,27 @@ fun RenderStatsBadge(
         ) {
             Text(
                 text = "${stats.fps} FPS",
-                color = Color(0xFF00E676),
+                color = fpsColor,
                 fontSize = 11.sp,
-                modifier = Modifier.padding(end = 8.dp)
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(end = 6.dp)
+            )
+            Text(
+                text = "${String.format(java.util.Locale.US, "%.1f", stats.frameTimeMs)} ms",
+                color = Color(0xFF80CBC4),
+                fontSize = 10.sp,
+                modifier = Modifier.padding(end = 6.dp)
             )
             Text(
                 text = "${stats.trianglesDrawn} Tris",
                 color = Color(0xFF81D4FA),
-                fontSize = 11.sp,
-                modifier = Modifier.padding(end = 8.dp)
+                fontSize = 10.sp,
+                modifier = Modifier.padding(end = 6.dp)
             )
             Text(
                 text = "$entityCount Ents",
                 color = Color(0xFFFFCC80),
-                fontSize = 11.sp
+                fontSize = 10.sp
             )
         }
     }

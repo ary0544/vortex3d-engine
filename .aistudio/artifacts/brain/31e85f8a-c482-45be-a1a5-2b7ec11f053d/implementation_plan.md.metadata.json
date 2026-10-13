@@ -1,6 +1,6 @@
 {
-  "summary": "Rencana komprehensif perbaikan kenyamanan UI, dialog pop-up layar penuh untuk pemilihan file, optimasi performa render 3D viewport & respon sentuhan orbit kamera, serta perapihan tab dock tanpa teks terpotong.",
-  "updatedAt": "2026-10-13T05:20:25.643522911Z",
+  "summary": "Rencana perbaikan performa rendering 3D (Backface Culling, FPS nyata dan latency milidetik, penanganan gesture lancar) serta perombakan antarmuka File Manager (toolbar kompak satu baris yang dapat dilipat agar area gulir file leluasa di mode landscape).",
+  "updatedAt": "2026-10-13T07:33:30.616807269Z",
   "requestFeedback": true,
   "userFacing": true
 }
