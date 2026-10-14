@@ -1,0 +1,6 @@
+{
+  "summary": "Rencana implementasi orientasi Fixed Landscape penuh di seluruh aplikasi (Lobby/Project Hub, Studio, Play Mode), perbaikan sistem auto-hide bilah navigasi imersif setelah keyboard ditutup, serta optimasi performa komprehensif pada kanvas 3D (backface culling, buffer reuse) dan UI lists.",
+  "updatedAt": "2026-10-14T04:34:52.769331974Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

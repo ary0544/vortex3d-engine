@@ -87,6 +87,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -189,7 +194,7 @@ fun GlbImportPreviewDialog(
     }
 
     // Tab Pengatur di Sisi Kanan (0: Info Lengkap, 1: Pengaturan Impor, 2: Hierarki & Tulang, 3: Animasi)
-    var selectedRightTab by remember { mutableIntStateOf(0) }
+    var selectedRightTab by remember { mutableIntStateOf(if (inspection.boneCount > 0 || inspection.totalNodesCount > 0) 2 else 0) }
 
     // Konfigurasi Skala & Spawning
     var modelScale by remember { mutableFloatStateOf(inspection.suggestedScale) }
@@ -243,7 +248,8 @@ fun GlbImportPreviewDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            dismissOnBackPress = true
+            dismissOnBackPress = true,
+            decorFitsSystemWindows = false
         )
     ) {
         Surface(
@@ -364,20 +370,10 @@ fun GlbImportPreviewDialog(
                     }
                 }
 
-                // 2. MAIN SPLIT CONTENT
-                // Sisi Kiri: KOTAK 1:1 VIEWPORT (Murni Canvas 3D, tanpa pengatur di dalam viewport, gestur 2-jari saja)
-                // Sisi Kanan: SEMUA PENGONTROL TERATUR & EXPANDED
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    // SISI KIRI: Kotak 1:1 Viewport Murni
+                // 2. MAIN SPLIT CONTENT (ADAPTIF: Landscape Side-by-Side vs Portrait Vertical Split)
+                val viewportContent = @Composable { modifier: Modifier ->
                     Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(1f)
+                        modifier = modifier
                             .clip(RoundedCornerShape(8.dp))
                             .background(Color(0xFF070A0F))
                             .border(1.5.dp, Color(0xFF1E2838), RoundedCornerShape(8.dp))
@@ -580,6 +576,10 @@ fun GlbImportPreviewDialog(
                                     val x2 = projX[tri.i2]
                                     val y2 = projY[tri.i2]
 
+                                    // Screen-space 2D backface culling: discard backward-facing triangles
+                                    val cross2d = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)
+                                    if (cross2d <= 0f) continue
+
                                     if ((x0 < -100f && x1 < -100f && x2 < -100f) ||
                                         (x0 > w + 100f && x1 > w + 100f && x2 > w + 100f) ||
                                         (y0 < -100f && y1 < -100f && y2 < -100f) ||
@@ -623,15 +623,31 @@ fun GlbImportPreviewDialog(
                                 inspection.rootNodes.forEach { drawBoneJoints(it) }
                             }
                         }
+
+                        // Badge status kontrol sentuh di pojok viewport
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(6.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF0D1117).copy(alpha = 0.85f))
+                                .border(0.8.dp, Color(0xFF30363D), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "1-Jari: Orbit • 2-Jari: Pan/Zoom",
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF00E5FF)
+                            )
+                        }
                     }
+                }
 
-                    Spacer(Modifier.width(8.dp))
-
-                    // SISI KANAN: SEMUA PENGONTROL TERATUR & EXPANDED
+                // SISI KANAN / BAWAH: SEMUA PENGONTROL TERATUR & EXPANDED
+                val controlsContent = @Composable { modifier: Modifier ->
                     Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
+                        modifier = modifier
                             .background(Color(0xFF0E131C), RoundedCornerShape(8.dp))
                             .border(1.dp, Color(0xFF1B2433), RoundedCornerShape(8.dp))
                             .padding(8.dp)
@@ -1052,6 +1068,49 @@ fun GlbImportPreviewDialog(
                                 Text("Spawn ke Scene 3D ★", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
                             }
                         }
+                    }
+                }
+
+                val configuration = LocalConfiguration.current
+                val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+                if (isLandscape) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        viewportContent(
+                            Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        controlsContent(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        viewportContent(
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(0.42f)
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        controlsContent(
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(0.58f)
+                        )
                     }
                 }
             }
@@ -1691,6 +1750,14 @@ private fun NodeTreeItemRow(node: GlbNodeInfo, depth: Int) {
                 .padding(start = (depth * 14).dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                imageVector = if (node.children.isEmpty()) Icons.Default.Circle else if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = if (node.children.isEmpty()) Color(0xFF30363D) else Color(0xFF8B949E),
+                modifier = Modifier.size(12.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+
             val (badgeColor, typeLabel) = when (node.type) {
                 GlbNodeType.BONE -> Pair(Color(0xFFFFD54F), "BONE")
                 GlbNodeType.MESH -> Pair(Color(0xFF00E5FF), "MESH")
@@ -1717,6 +1784,16 @@ private fun NodeTreeItemRow(node: GlbNodeInfo, depth: Int) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
+
+            if (node.translation != Vec3.ZERO) {
+                Text(
+                    text = String.format(Locale.US, "[%.2f, %.2f, %.2f]", node.translation.x, node.translation.y, node.translation.z),
+                    fontSize = 8.5.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color(0xFF7EE787).copy(alpha = 0.8f),
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+            }
 
             if (node.children.isNotEmpty()) {
                 Text(

@@ -76,6 +76,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.Home
 import com.example.ui.editor.ProjectHubScreen
 import com.example.ui.editor.LandscapeStudioScreen
+import com.example.ui.editor.GlbImportPreviewDialog
 import com.example.ui.editor.LuaEditorView
 import com.example.ui.editor.PlayModeOverlay
 import com.example.ui.editor.ShaderEditorView
@@ -95,9 +96,27 @@ import androidx.compose.ui.platform.LocalDensity
 import com.example.viewmodel.ProjectOrientation
 
 class MainActivity : ComponentActivity() {
+
+    private fun hideSystemBars() {
+        val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+        insetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            hideSystemBars()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         enableEdgeToEdge()
+        hideSystemBars()
+
         setContent {
             MyApplicationTheme {
                 val viewModel: EngineViewModel = viewModel()
@@ -106,39 +125,22 @@ class MainActivity : ComponentActivity() {
                 val activeTab by viewModel.workspaceTab.collectAsState()
                 val projects by viewModel.projects.collectAsState()
                 val activeProjectId by viewModel.activeProjectId.collectAsState()
-                val activeProject = projects.find { it.id == activeProjectId }
-                val projectOrientation = activeProject?.orientation ?: ProjectOrientation.LANDSCAPE
-
-                val configuration = LocalConfiguration.current
-                val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
                 val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
 
-                // Dynamically manage screen orientation and system navigation bar visibility
-                LaunchedEffect(isInLobby, projectOrientation, imeBottom) {
-                    val insetsController = WindowCompat.getInsetsController(window, window.decorView)
-                    insetsController.systemBarsBehavior =
-                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-
-                    if (isInLobby) {
-                        // Lobby screen is fixed Portrait with visible navigation bar
-                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                        insetsController.show(WindowInsetsCompat.Type.systemBars())
-                    } else {
-                        // Inside project: orientation based on project settings, hide navigation buttons
-                        requestedOrientation = when (projectOrientation) {
-                            ProjectOrientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                            ProjectOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                            ProjectOrientation.AUTO_SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                        }
-                        if (imeBottom == 0) {
-                            insetsController.hide(WindowInsetsCompat.Type.systemBars())
-                        }
+                // Immersive System Bars Auto-Hide immediately when keyboard closes
+                LaunchedEffect(imeBottom) {
+                    if (imeBottom == 0) {
+                        hideSystemBars()
                     }
                 }
 
-                BackHandler(enabled = isPlayMode || !isInLobby) {
-                    if (isPlayMode) {
+                val inspectingGlbResult by viewModel.inspectingGlbResult.collectAsState()
+
+                BackHandler(enabled = inspectingGlbResult != null || isPlayMode || !isInLobby) {
+                    if (inspectingGlbResult != null) {
+                        viewModel.closeGlbInspection()
+                    } else if (isPlayMode) {
                         viewModel.setPlayMode(false)
                     } else if (!isInLobby) {
                         viewModel.setInLobby(true)
@@ -149,10 +151,17 @@ class MainActivity : ComponentActivity() {
                     PlayModeOverlay(viewModel = viewModel)
                 } else if (isInLobby) {
                     ProjectHubScreen(viewModel = viewModel)
-                } else if (isLandscape) {
-                    LandscapeStudioScreen(viewModel = viewModel)
                 } else {
-                    MainStudioScreen(viewModel = viewModel)
+                    LandscapeStudioScreen(viewModel = viewModel)
+                }
+
+                // Global GLB Import & Preview Dialog
+                inspectingGlbResult?.let { inspection ->
+                    GlbImportPreviewDialog(
+                        inspection = inspection,
+                        viewModel = viewModel,
+                        onDismiss = { viewModel.closeGlbInspection() }
+                    )
                 }
             }
         }

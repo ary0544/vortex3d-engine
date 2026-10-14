@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -781,7 +783,11 @@ fun CreateNewSceneDialog(
             Text("Create New 3D Scene", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
         },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Text("Scene Name", fontSize = 12.sp, color = Color(0xFF8B949E))
                 Spacer(Modifier.height(4.dp))
                 OutlinedTextField(

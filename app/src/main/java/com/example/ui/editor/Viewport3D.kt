@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -72,12 +73,21 @@ fun Viewport3D(
     val isWireframe by viewModel.isWireframeMode.collectAsState()
     val cameraSettings by viewModel.cameraSettings.collectAsState()
 
-    // Godot 4-style Continuous 60 FPS VSync render loop
+    // Godot 4-style Adaptive VSync render loop (60 FPS during simulation/interaction, power-saving idle)
     var frameTick by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) {
+    var isInteracting by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isSimulating, isInteracting) {
         while (isActive) {
-            withFrameNanos { timeNanos ->
-                frameTick = timeNanos
+            if (isSimulating || isInteracting) {
+                withFrameNanos { timeNanos ->
+                    frameTick = timeNanos
+                }
+            } else {
+                withFrameNanos { timeNanos ->
+                    frameTick = timeNanos
+                }
+                delay(32L) // ~30 FPS power-saving cadence during idle editor
             }
         }
     }
@@ -92,6 +102,7 @@ fun Viewport3D(
                 .pointerInput(cameraSettings) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        isInteracting = true
                         var isTap = true
                         val touchSlop = viewConfiguration.touchSlop
                         var totalDragDistance = 0f
@@ -182,6 +193,7 @@ fun Viewport3D(
                                 height = size.height.toFloat()
                             )
                         }
+                        isInteracting = false
                     }
                 }
         ) {

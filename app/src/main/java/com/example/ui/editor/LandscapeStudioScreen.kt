@@ -100,7 +100,6 @@ fun LandscapeStudioScreen(
     val isRightDockOpen by viewModel.isRightDockOpen.collectAsState()
     val isBottomDockOpen by viewModel.isBottomDockOpen.collectAsState()
     val rightDockTab by viewModel.rightDockTab.collectAsState()
-    val inspectingGlbResult by viewModel.inspectingGlbResult.collectAsState()
 
     var selectedLeftTab by remember { mutableIntStateOf(0) } // 0: Scene Tree, 1: Assets, 2: Files
 
@@ -586,15 +585,6 @@ fun LandscapeStudioScreen(
                 modifier = Modifier.height(95.dp),
                 isExpanded = true,
                 onToggleExpand = { viewModel.toggleBottomDock() }
-            )
-        }
-
-        // 5. GODOT-STYLE 3D GLB IMPORT & PREVIEW MODAL
-        inspectingGlbResult?.let { inspection ->
-            GlbImportPreviewDialog(
-                inspection = inspection,
-                viewModel = viewModel,
-                onDismiss = { viewModel.closeGlbInspection() }
             )
         }
     }
