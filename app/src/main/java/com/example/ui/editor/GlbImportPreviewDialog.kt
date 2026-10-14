@@ -5,6 +5,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -106,6 +109,7 @@ import kotlinx.coroutines.isActive
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
@@ -139,7 +143,47 @@ fun GlbImportPreviewDialog(
     var isWireframe by remember { mutableStateOf(false) }
     var showGrid by remember { mutableStateOf(true) }
     var showBones by remember { mutableStateOf(inspection.boneCount > 0) }
-    var isPreviewMaximized by remember { mutableStateOf(false) }
+    var cameraRevision by remember { mutableStateOf(0L) }
+
+    // Mode Gestur 2-Jari: "pan" (Geser / Pan Kamera) atau "orbit" (Putar Sudut Kamera)
+    var twoFingerMode by remember { mutableStateOf("pan") }
+    var invertX by remember { mutableStateOf(false) }
+    var invertY by remember { mutableStateOf(false) }
+
+    fun resetCameraView() {
+        yawState = 35f
+        pitchState = 15f
+        distanceState = 3.2f
+        previewCamera.reset()
+        previewCamera.yawDegrees = yawState
+        previewCamera.pitchDegrees = pitchState
+        previewCamera.distance = distanceState
+        cameraRevision++
+    }
+
+    fun setFrontView() {
+        yawState = 0f
+        pitchState = 0f
+        previewCamera.yawDegrees = yawState
+        previewCamera.pitchDegrees = pitchState
+        cameraRevision++
+    }
+
+    fun setTopView() {
+        yawState = 0f
+        pitchState = 85f
+        previewCamera.yawDegrees = yawState
+        previewCamera.pitchDegrees = pitchState
+        cameraRevision++
+    }
+
+    fun setIsometricView() {
+        yawState = 45f
+        pitchState = 30f
+        previewCamera.yawDegrees = yawState
+        previewCamera.pitchDegrees = pitchState
+        cameraRevision++
+    }
 
     // Tab Pengatur di Sisi Kanan (0: Info Lengkap, 1: Pengaturan Impor, 2: Hierarki & Tulang, 3: Animasi)
     var selectedRightTab by remember { mutableIntStateOf(0) }
@@ -273,21 +317,8 @@ fun GlbImportPreviewDialog(
                     // Header Action Buttons
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        IconButton(
-                            onClick = { isPreviewMaximized = !isPreviewMaximized },
-                            modifier = Modifier
-                                .size(30.dp)
-                                .testTag("toggle_maximize_preview_btn")
-                        ) {
-                            Icon(
-                                imageVector = if (isPreviewMaximized) Icons.Default.ViewInAr else Icons.Default.Fullscreen,
-                                contentDescription = if (isPreviewMaximized) "Kembalikan Split View" else "Perbesar Preview Penuh",
-                                tint = if (isPreviewMaximized) Color(0xFF00E5FF) else Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
 
                         OutlinedButton(
                             onClick = {
@@ -331,322 +362,415 @@ fun GlbImportPreviewDialog(
                 }
 
                 // 2. MAIN SPLIT CONTENT
-                // Sisi Kiri: PENUH Viewport GLB (weight 1.35f)
-                // Sisi Kanan: Pengatur & Tab Info (weight 1.0f)
+                // Sisi Kiri: KOTAK 1:1 VIEWPORT (Murni Canvas 3D, tanpa pengatur di dalam viewport, gestur 2-jari saja)
+                // Sisi Kanan: SEMUA PENGONTROL TERATUR & EXPANDED
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    // LEFT COLUMN: Full 3D Viewport & Interactive Player
+                    // SISI KIRI: Kotak 1:1 Viewport Murni
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF070A0F))
+                            .border(1.5.dp, Color(0xFF1E2838), RoundedCornerShape(8.dp))
+                            .pointerInput(twoFingerMode, invertX, invertY) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    var prevDistance = 0f
+                                    var prevCenter = Offset.Zero
+
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val activePointers = event.changes.filter { it.pressed }
+
+                                        // HANYA merespons jika 2 jari (atau lebih) aktif!
+                                        if (activePointers.size >= 2) {
+                                            val p1 = activePointers[0].position
+                                            val p2 = activePointers[1].position
+                                            val currentDist = hypot(p1.x - p2.x, p1.y - p2.y)
+                                            val currentCenter = Offset((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f)
+
+                                            if (prevDistance > 0f) {
+                                                // Pinch zoom (perbesar / perkecil)
+                                                val zoom = currentDist / prevDistance
+                                                if (zoom > 0.01f && zoom < 100f) {
+                                                    distanceState = (distanceState / zoom).coerceIn(1.0f, 35.0f)
+                                                    previewCamera.distance = distanceState
+                                                }
+
+                                                // Geser 2-jari (Pan atau Orbit)
+                                                val panDelta = currentCenter - prevCenter
+                                                if (panDelta != Offset.Zero) {
+                                                    val signX = if (invertX) -1f else 1f
+                                                    val signY = if (invertY) -1f else 1f
+                                                    if (twoFingerMode == "pan") {
+                                                        val factor = 0.005f * (distanceState / 4f)
+                                                        previewCamera.pan(-panDelta.x * factor * signX, panDelta.y * factor * signY)
+                                                    } else {
+                                                        val factor = 0.4f
+                                                        yawState = (yawState + panDelta.x * factor * signX) % 360f
+                                                        pitchState = (pitchState - panDelta.y * factor * signY).coerceIn(-85f, 85f)
+                                                        previewCamera.yawDegrees = yawState
+                                                        previewCamera.pitchDegrees = pitchState
+                                                    }
+                                                    cameraRevision++
+                                                }
+                                            }
+
+                                            prevDistance = currentDist
+                                            prevCenter = currentCenter
+                                            activePointers.forEach { it.consume() }
+                                        } else {
+                                            prevDistance = 0f
+                                            prevCenter = Offset.Zero
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                }
+                            }
+                    ) {
+                        // RENDER CANVAS 3D (Murni tanpa overlay pengatur/chip di dalam viewport)
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            cameraRevision.let {} // Memastikan Canvas recompose ketika kamera digeser/diputar
+                            val w = size.width
+                            val h = size.height
+                            if (w <= 0f || h <= 0f) return@Canvas
+
+                            val aspect = w / h
+                            val viewMatrix = previewCamera.getViewMatrix()
+                            val projMatrix = previewCamera.getProjectionMatrix(aspect)
+                            val viewProj = projMatrix * viewMatrix
+
+                            // 1. Gambar Grid 3D Lantai (y = 0)
+                            if (showGrid) {
+                                val gridColor = Color(0xFF1E2838)
+                                val gridCenterColor = Color(0xFF00E5FF).copy(alpha = 0.5f)
+                                val range = 4
+                                val spacing = 0.6f
+
+                                for (i in -range..range) {
+                                    val pStart = viewProj.transformPoint(Vec3(i * spacing, -1.6f, -range * spacing))
+                                    val pEnd = viewProj.transformPoint(Vec3(i * spacing, -1.6f, range * spacing))
+
+                                    if (pStart.z in -1.5f..1.5f && pEnd.z in -1.5f..1.5f) {
+                                        val x0 = (pStart.x * 0.5f + 0.5f) * w
+                                        val y0 = (-pStart.y * 0.5f + 0.5f) * h
+                                        val x1 = (pEnd.x * 0.5f + 0.5f) * w
+                                        val y1 = (-pEnd.y * 0.5f + 0.5f) * h
+                                        drawLine(
+                                            color = if (i == 0) gridCenterColor else gridColor,
+                                            start = Offset(x0, y0),
+                                            end = Offset(x1, y1),
+                                            strokeWidth = if (i == 0) 1.5f else 1f
+                                        )
+                                    }
+
+                                    val zStart = viewProj.transformPoint(Vec3(-range * spacing, -1.6f, i * spacing))
+                                    val zEnd = viewProj.transformPoint(Vec3(range * spacing, -1.6f, i * spacing))
+                                    if (zStart.z in -1.5f..1.5f && zEnd.z in -1.5f..1.5f) {
+                                        val x0 = (zStart.x * 0.5f + 0.5f) * w
+                                        val y0 = (-zStart.y * 0.5f + 0.5f) * h
+                                        val x1 = (zEnd.x * 0.5f + 0.5f) * w
+                                        val y1 = (-zEnd.y * 0.5f + 0.5f) * h
+                                        drawLine(
+                                            color = if (i == 0) gridCenterColor else gridColor,
+                                            start = Offset(x0, y0),
+                                            end = Offset(x1, y1),
+                                            strokeWidth = if (i == 0) 1.5f else 1f
+                                        )
+                                    }
+                                }
+                            }
+
+                            // 2. Render Mesh Model GLB
+                            val mesh = inspection.mesh
+                            val baseColor = Color(inspection.material.albedoColor)
+                            val lightDir = Vec3(0.5f, 0.9f, 0.6f).normalized()
+
+                            val vertCount = mesh.vertices.size
+                            val projX = FloatArray(vertCount)
+                            val projY = FloatArray(vertCount)
+                            val projZ = FloatArray(vertCount)
+
+                            for (vi in 0 until vertCount) {
+                                val v = mesh.vertices[vi]
+                                // Normalisasi centering dan autofit agar model terlihat jelas
+                                val centeredPos = (v.position - centerOffset) * fitScale
+                                val ndc = viewProj.transformPoint(centeredPos)
+                                projX[vi] = (ndc.x * 0.5f + 0.5f) * w
+                                projY[vi] = (-ndc.y * 0.5f + 0.5f) * h
+                                projZ[vi] = ndc.z
+                            }
+
+                            val triCount = mesh.triangles.size
+                            val triStep = if (triCount > 1500) maxOf(1, triCount / 1200) else 1
+
+                            if (isWireframe) {
+                                val wfColor = Color(0xFF00E5FF).copy(alpha = 0.8f)
+                                val wfPath = Path()
+                                for (ti in 0 until triCount step triStep) {
+                                    val tri = mesh.triangles[ti]
+                                    val z0 = projZ[tri.i0]
+                                    val z1 = projZ[tri.i1]
+                                    val z2 = projZ[tri.i2]
+                                    if (z0 !in -1.5f..1.5f && z1 !in -1.5f..1.5f && z2 !in -1.5f..1.5f) continue
+
+                                    wfPath.moveTo(projX[tri.i0], projY[tri.i0])
+                                    wfPath.lineTo(projX[tri.i1], projY[tri.i1])
+                                    wfPath.lineTo(projX[tri.i2], projY[tri.i2])
+                                    wfPath.close()
+                                }
+                                drawPath(wfPath, color = wfColor, style = Stroke(width = 1f))
+                            } else {
+                                val triPath = Path()
+                                for (ti in 0 until triCount step triStep) {
+                                    val tri = mesh.triangles[ti]
+                                    val z0 = projZ[tri.i0]
+                                    val z1 = projZ[tri.i1]
+                                    val z2 = projZ[tri.i2]
+
+                                    if (z0 < -1.5f || z0 > 1.5f || z1 < -1.5f || z1 > 1.5f || z2 < -1.5f || z2 > 1.5f) continue
+
+                                    val x0 = projX[tri.i0]
+                                    val y0 = projY[tri.i0]
+                                    val x1 = projX[tri.i1]
+                                    val y1 = projY[tri.i1]
+                                    val x2 = projX[tri.i2]
+                                    val y2 = projY[tri.i2]
+
+                                    if ((x0 < -100f && x1 < -100f && x2 < -100f) ||
+                                        (x0 > w + 100f && x1 > w + 100f && x2 > w + 100f) ||
+                                        (y0 < -100f && y1 < -100f && y2 < -100f) ||
+                                        (y0 > h + 100f && y1 > h + 100f && y2 > h + 100f)
+                                    ) continue
+
+                                    val v0 = mesh.vertices[tri.i0]
+                                    val normal = v0.normal
+                                    val lightIntensity = (abs(normal.dot(lightDir)) * 0.65f + 0.35f).coerceIn(0.25f, 1.0f)
+                                    val shadeColor = baseColor.copy(
+                                        red = (baseColor.red * lightIntensity).coerceIn(0f, 1f),
+                                        green = (baseColor.green * lightIntensity).coerceIn(0f, 1f),
+                                        blue = (baseColor.blue * lightIntensity).coerceIn(0f, 1f),
+                                        alpha = 1.0f
+                                    )
+
+                                    triPath.reset()
+                                    triPath.moveTo(x0, y0)
+                                    triPath.lineTo(x1, y1)
+                                    triPath.lineTo(x2, y2)
+                                    triPath.close()
+                                    drawPath(triPath, color = shadeColor)
+                                }
+                            }
+
+                            // 3. Visualisasi Sendi Tulang (Skeleton Bones)
+                            if (showBones && inspection.boneCount > 0) {
+                                val boneJointColor = Color(0xFFFFD54F)
+                                fun drawBoneJoints(node: GlbNodeInfo) {
+                                    if (node.type == GlbNodeType.BONE) {
+                                        val bp = (node.translation - centerOffset) * fitScale
+                                        val p = viewProj.transformPoint(bp)
+                                        if (p.z in -1.2f..1.2f) {
+                                            val bx = (p.x * 0.5f + 0.5f) * w
+                                            val by = (-p.y * 0.5f + 0.5f) * h
+                                            drawCircle(color = boneJointColor, radius = 4f, center = Offset(bx, by))
+                                        }
+                                    }
+                                    node.children.forEach { drawBoneJoints(it) }
+                                }
+                                inspection.rootNodes.forEach { drawBoneJoints(it) }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    // SISI KANAN: SEMUA PENGONTROL TERATUR & EXPANDED
                     Column(
                         modifier = Modifier
-                            .weight(if (isPreviewMaximized) 1f else 1.85f)
+                            .weight(1f)
                             .fillMaxHeight()
-                            .background(Color(0xFF070A0F))
-                            .padding(4.dp)
+                            .background(Color(0xFF0E131C), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF1B2433), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
                     ) {
-                        // 3D Canvas Viewport Box
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF0F141E))
-                                .border(1.dp, Color(0xFF212B3B), RoundedCornerShape(8.dp))
-                                .pointerInput(Unit) {
-                                    detectTransformGestures { _, pan, zoom, _ ->
-                                        if (zoom != 1.0f) {
-                                            distanceState = (distanceState / zoom).coerceIn(1.2f, 30.0f)
-                                            previewCamera.distance = distanceState
-                                        }
-                                        if (pan != Offset.Zero) {
-                                            yawState = (yawState + pan.x * 0.4f) % 360f
-                                            pitchState = (pitchState - pan.y * 0.4f).coerceIn(-85f, 85f)
-                                            previewCamera.yawDegrees = yawState
-                                            previewCamera.pitchDegrees = pitchState
-                                        }
-                                    }
-                                }
-                                .pointerInput(Unit) {
-                                    detectDragGestures { change, dragAmount ->
-                                        change.consume()
-                                        yawState = (yawState + dragAmount.x * 0.45f) % 360f
-                                        pitchState = (pitchState - dragAmount.y * 0.45f).coerceIn(-85f, 85f)
-                                        previewCamera.yawDegrees = yawState
-                                        previewCamera.pitchDegrees = pitchState
-                                    }
-                                }
-                        ) {
-                            // RENDER CANVAS 3D
-                            Canvas(modifier = Modifier.fillMaxSize()) {
-                                val w = size.width
-                                val h = size.height
-                                if (w <= 0f || h <= 0f) return@Canvas
-
-                                val aspect = w / h
-                                val viewMatrix = previewCamera.getViewMatrix()
-                                val projMatrix = previewCamera.getProjectionMatrix(aspect)
-                                val viewProj = projMatrix * viewMatrix
-
-                                // 1. Gambar Grid 3D Lantai (y = 0)
-                                if (showGrid) {
-                                    val gridColor = Color(0xFF1E2838)
-                                    val gridCenterColor = Color(0xFF00E5FF).copy(alpha = 0.5f)
-                                    val range = 4
-                                    val spacing = 0.6f
-
-                                    for (i in -range..range) {
-                                        val pStart = viewProj.transformPoint(Vec3(i * spacing, -1.6f, -range * spacing))
-                                        val pEnd = viewProj.transformPoint(Vec3(i * spacing, -1.6f, range * spacing))
-
-                                        if (pStart.z in -1.5f..1.5f && pEnd.z in -1.5f..1.5f) {
-                                            val x0 = (pStart.x * 0.5f + 0.5f) * w
-                                            val y0 = (-pStart.y * 0.5f + 0.5f) * h
-                                            val x1 = (pEnd.x * 0.5f + 0.5f) * w
-                                            val y1 = (-pEnd.y * 0.5f + 0.5f) * h
-                                            drawLine(
-                                                color = if (i == 0) gridCenterColor else gridColor,
-                                                start = Offset(x0, y0),
-                                                end = Offset(x1, y1),
-                                                strokeWidth = if (i == 0) 1.5f else 1f
-                                            )
-                                        }
-
-                                        val zStart = viewProj.transformPoint(Vec3(-range * spacing, -1.6f, i * spacing))
-                                        val zEnd = viewProj.transformPoint(Vec3(range * spacing, -1.6f, i * spacing))
-                                        if (zStart.z in -1.5f..1.5f && zEnd.z in -1.5f..1.5f) {
-                                            val x0 = (zStart.x * 0.5f + 0.5f) * w
-                                            val y0 = (-zStart.y * 0.5f + 0.5f) * h
-                                            val x1 = (zEnd.x * 0.5f + 0.5f) * w
-                                            val y1 = (-zEnd.y * 0.5f + 0.5f) * h
-                                            drawLine(
-                                                color = if (i == 0) gridCenterColor else gridColor,
-                                                start = Offset(x0, y0),
-                                                end = Offset(x1, y1),
-                                                strokeWidth = if (i == 0) 1.5f else 1f
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // 2. Render Mesh Model GLB
-                                val mesh = inspection.mesh
-                                val baseColor = Color(inspection.material.albedoColor)
-                                val lightDir = Vec3(0.5f, 0.9f, 0.6f).normalized()
-
-                                val vertCount = mesh.vertices.size
-                                val projX = FloatArray(vertCount)
-                                val projY = FloatArray(vertCount)
-                                val projZ = FloatArray(vertCount)
-
-                                for (vi in 0 until vertCount) {
-                                    val v = mesh.vertices[vi]
-                                    // Normalisasi centering dan autofit agar model terlihat jelas
-                                    val centeredPos = (v.position - centerOffset) * fitScale
-                                    val ndc = viewProj.transformPoint(centeredPos)
-                                    projX[vi] = (ndc.x * 0.5f + 0.5f) * w
-                                    projY[vi] = (-ndc.y * 0.5f + 0.5f) * h
-                                    projZ[vi] = ndc.z
-                                }
-
-                                val triCount = mesh.triangles.size
-                                // Adaptive LOD step untuk memastikan responsivitas 60 FPS pada model padat
-                                val triStep = if (triCount > 1500) maxOf(1, triCount / 1200) else 1
-
-                                if (isWireframe) {
-                                    val wfColor = Color(0xFF00E5FF).copy(alpha = 0.8f)
-                                    val wfPath = Path()
-                                    for (ti in 0 until triCount step triStep) {
-                                        val tri = mesh.triangles[ti]
-                                        val z0 = projZ[tri.i0]
-                                        val z1 = projZ[tri.i1]
-                                        val z2 = projZ[tri.i2]
-                                        if (z0 !in -1.5f..1.5f && z1 !in -1.5f..1.5f && z2 !in -1.5f..1.5f) continue
-
-                                        wfPath.moveTo(projX[tri.i0], projY[tri.i0])
-                                        wfPath.lineTo(projX[tri.i1], projY[tri.i1])
-                                        wfPath.lineTo(projX[tri.i2], projY[tri.i2])
-                                        wfPath.close()
-                                    }
-                                    drawPath(wfPath, color = wfColor, style = Stroke(width = 1f))
-                                } else {
-                                    val triPath = Path()
-                                    for (ti in 0 until triCount step triStep) {
-                                        val tri = mesh.triangles[ti]
-                                        val z0 = projZ[tri.i0]
-                                        val z1 = projZ[tri.i1]
-                                        val z2 = projZ[tri.i2]
-
-                                        // Clipping cepat
-                                        if (z0 < -1.5f || z0 > 1.5f || z1 < -1.5f || z1 > 1.5f || z2 < -1.5f || z2 > 1.5f) continue
-
-                                        val x0 = projX[tri.i0]
-                                        val y0 = projY[tri.i0]
-                                        val x1 = projX[tri.i1]
-                                        val y1 = projY[tri.i1]
-                                        val x2 = projX[tri.i2]
-                                        val y2 = projY[tri.i2]
-
-                                        // Bound check sederhana
-                                        if ((x0 < -100f && x1 < -100f && x2 < -100f) ||
-                                            (x0 > w + 100f && x1 > w + 100f && x2 > w + 100f) ||
-                                            (y0 < -100f && y1 < -100f && y2 < -100f) ||
-                                            (y0 > h + 100f && y1 > h + 100f && y2 > h + 100f)
-                                        ) continue
-
-                                        val v0 = mesh.vertices[tri.i0]
-                                        val normal = v0.normal
-                                        // Dua sisi pencahayaan agar bagian depan maupun belakang tetap tampil bertekstur
-                                        val lightIntensity = (abs(normal.dot(lightDir)) * 0.65f + 0.35f).coerceIn(0.25f, 1.0f)
-                                        val shadeColor = baseColor.copy(
-                                            red = (baseColor.red * lightIntensity).coerceIn(0f, 1f),
-                                            green = (baseColor.green * lightIntensity).coerceIn(0f, 1f),
-                                            blue = (baseColor.blue * lightIntensity).coerceIn(0f, 1f),
-                                            alpha = 1.0f
-                                        )
-
-                                        triPath.reset()
-                                        triPath.moveTo(x0, y0)
-                                        triPath.lineTo(x1, y1)
-                                        triPath.lineTo(x2, y2)
-                                        triPath.close()
-                                        drawPath(triPath, color = shadeColor)
-                                    }
-                                }
-
-                                // 3. Visualisasi Sendi Tulang (Skeleton Bones)
-                                if (showBones && inspection.boneCount > 0) {
-                                    val boneJointColor = Color(0xFFFFD54F)
-                                    fun drawBoneJoints(node: GlbNodeInfo) {
-                                        if (node.type == GlbNodeType.BONE) {
-                                            val bp = (node.translation - centerOffset) * fitScale
-                                            val p = viewProj.transformPoint(bp)
-                                            if (p.z in -1.2f..1.2f) {
-                                                val bx = (p.x * 0.5f + 0.5f) * w
-                                                val by = (-p.y * 0.5f + 0.5f) * h
-                                                drawCircle(color = boneJointColor, radius = 4f, center = Offset(bx, by))
-                                            }
-                                        }
-                                        node.children.forEach { drawBoneJoints(it) }
-                                    }
-                                    inspection.rootNodes.forEach { drawBoneJoints(it) }
-                                }
-                            }
-
-                            // Viewport Controls Overlay (Top-Right)
-                            Row(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
-                                    .horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                FilterChip(
-                                    selected = isWireframe,
-                                    onClick = { isWireframe = !isWireframe },
-                                    label = { Text("Wireframe", fontSize = 10.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Color(0xFF00E5FF),
-                                        selectedLabelColor = Color.Black
-                                    ),
-                                    modifier = Modifier.height(26.dp)
-                                )
-                                FilterChip(
-                                    selected = showGrid,
-                                    onClick = { showGrid = !showGrid },
-                                    label = { Text("Grid", fontSize = 10.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Color(0xFF00E5FF),
-                                        selectedLabelColor = Color.Black
-                                    ),
-                                    modifier = Modifier.height(26.dp)
-                                )
-                                if (inspection.boneCount > 0) {
-                                    FilterChip(
-                                        selected = showBones,
-                                        onClick = { showBones = !showBones },
-                                        label = { Text("Tulang", fontSize = 10.sp) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = Color(0xFFFFD54F),
-                                            selectedLabelColor = Color.Black
-                                        ),
-                                        modifier = Modifier.height(26.dp)
-                                    )
-                                }
-                                IconButton(
-                                    onClick = {
-                                        yawState = 35f
-                                        pitchState = 15f
-                                        distanceState = 3.2f
-                                        previewCamera.yawDegrees = yawState
-                                        previewCamera.pitchDegrees = pitchState
-                                        previewCamera.distance = distanceState
-                                    },
-                                    modifier = Modifier.size(26.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Refresh,
-                                        contentDescription = "Auto-Fit Kamera",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-
-                            // Info Badge Overlay (Top-Left)
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(Color(0xFF161F2E).copy(alpha = 0.85f))
-                                    .border(1.dp, Color(0xFF263040), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 6.dp, vertical = 3.dp)
-                            ) {
-                                Text(
-                                    text = "Auto-Fit Viewport • ${inspection.mesh.vertexCount} Verts • ${inspection.mesh.triangleCount} Tris",
-                                    color = Color(0xFF00E5FF),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-
-                            // Gesture Hint (Bottom-Left)
-                            Text(
-                                text = "1-Jari: Orbit Rotasi • 2-Jari: Zoom Pinch",
-                                color = Color(0xFF8B949E).copy(alpha = 0.8f),
-                                fontSize = 9.sp,
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(6.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.height(4.dp))
-
-                        // Docked Animation Player Bar
+                        // 1. KONTROL TAMPILAN, KAMERA & GESTUR 2-JARI
                         Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(44.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF141A24)),
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF212B3B)),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(6.dp)
                         ) {
-                            if (animations.isNotEmpty()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                // Row 1: Tampilan & Presets Sudut Pandang
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Play/Pause Button
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        FilterChip(
+                                            selected = isWireframe,
+                                            onClick = { isWireframe = !isWireframe },
+                                            label = { Text("Wireframe", fontSize = 9.sp) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = Color(0xFF00E5FF),
+                                                selectedLabelColor = Color.Black
+                                            ),
+                                            modifier = Modifier.height(24.dp)
+                                        )
+                                        FilterChip(
+                                            selected = showGrid,
+                                            onClick = { showGrid = !showGrid },
+                                            label = { Text("Grid", fontSize = 9.sp) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = Color(0xFF00E5FF),
+                                                selectedLabelColor = Color.Black
+                                            ),
+                                            modifier = Modifier.height(24.dp)
+                                        )
+                                        if (inspection.boneCount > 0) {
+                                            FilterChip(
+                                                selected = showBones,
+                                                onClick = { showBones = !showBones },
+                                                label = { Text("Tulang", fontSize = 9.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = Color(0xFFFFD54F),
+                                                    selectedLabelColor = Color.Black
+                                                ),
+                                                modifier = Modifier.height(24.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = { setFrontView() },
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(24.dp),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text("Depan", fontSize = 9.sp, color = Color.White)
+                                        }
+                                        OutlinedButton(
+                                            onClick = { setTopView() },
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(24.dp),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text("Atas", fontSize = 9.sp, color = Color.White)
+                                        }
+                                        OutlinedButton(
+                                            onClick = { setIsometricView() },
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(24.dp),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text("Iso", fontSize = 9.sp, color = Color.White)
+                                        }
+                                        IconButton(
+                                            onClick = { resetCameraView() },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Refresh,
+                                                contentDescription = "Auto-Fit / Reset Kamera",
+                                                tint = Color(0xFF00E5FF),
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Row 2: Mode Gestur 2-Jari & Invert
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text("Gestur 2-Jari:", fontSize = 9.sp, color = Color(0xFF8B949E))
+                                        FilterChip(
+                                            selected = twoFingerMode == "pan",
+                                            onClick = { twoFingerMode = "pan" },
+                                            label = { Text("Geser (Pan)", fontSize = 9.sp) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = Color(0xFF1F6FEB),
+                                                selectedLabelColor = Color.White
+                                            ),
+                                            modifier = Modifier.height(22.dp)
+                                        )
+                                        FilterChip(
+                                            selected = twoFingerMode == "orbit",
+                                            onClick = { twoFingerMode = "orbit" },
+                                            label = { Text("Putar (Orbit)", fontSize = 9.sp) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = Color(0xFF1F6FEB),
+                                                selectedLabelColor = Color.White
+                                            ),
+                                            modifier = Modifier.height(22.dp)
+                                        )
+                                        Text("• Cubit (Pinch) = Zoom", fontSize = 8.5.sp, color = Color(0xFF00E5FF))
+                                    }
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        FilterChip(
+                                            selected = invertX,
+                                            onClick = { invertX = !invertX },
+                                            label = { Text("Inv X", fontSize = 8.5.sp) },
+                                            modifier = Modifier.height(20.dp)
+                                        )
+                                        FilterChip(
+                                            selected = invertY,
+                                            onClick = { invertY = !invertY },
+                                            label = { Text("Inv Y", fontSize = 8.5.sp) },
+                                            modifier = Modifier.height(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. PEMUTAR ANIMASI (JIKA MODEL MEMILIKI TREK ANIMASI)
+                        if (animations.isNotEmpty()) {
+                            Spacer(Modifier.height(4.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF141A24)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF212B3B)),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     IconButton(
                                         onClick = { isPlayingAnim = !isPlayingAnim },
                                         modifier = Modifier
-                                            .size(30.dp)
+                                            .size(26.dp)
                                             .clip(CircleShape)
                                             .background(if (isPlayingAnim) Color(0xFF00E5FF) else Color(0xFF238636))
                                             .testTag("glb_preview_play_pause_btn")
@@ -655,29 +779,28 @@ fun GlbImportPreviewDialog(
                                             imageVector = if (isPlayingAnim) Icons.Default.Pause else Icons.Default.PlayArrow,
                                             contentDescription = "Play/Pause",
                                             tint = if (isPlayingAnim) Color.Black else Color.White,
-                                            modifier = Modifier.size(16.dp)
+                                            modifier = Modifier.size(14.dp)
                                         )
                                     }
 
                                     Spacer(Modifier.width(6.dp))
 
-                                    // Dropdown Pemilih Animasi
                                     Box {
                                         OutlinedButton(
                                             onClick = { animDropdownExpanded = true },
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                                             modifier = Modifier
-                                                .height(30.dp)
+                                                .height(26.dp)
                                                 .testTag("glb_preview_anim_dropdown_btn")
                                         ) {
                                             Text(
                                                 text = currentAnim?.name ?: "Animasi",
-                                                fontSize = 11.sp,
+                                                fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(14.dp))
                                         }
 
                                         DropdownMenu(
@@ -689,7 +812,7 @@ fun GlbImportPreviewDialog(
                                                     text = {
                                                         Text(
                                                             "${idx + 1}. ${anim.name} (${String.format(Locale.US, "%.2fs", anim.duration)})",
-                                                            fontSize = 12.sp
+                                                            fontSize = 11.sp
                                                         )
                                                     },
                                                     onClick = {
@@ -705,12 +828,10 @@ fun GlbImportPreviewDialog(
 
                                     Spacer(Modifier.width(6.dp))
 
-                                    // Timeline Scrubber Slider with inlined duration labels
                                     val duration = currentAnim?.duration ?: 1f
                                     Text(
                                         text = String.format(Locale.US, "%.2fs", animCurrentTime),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 9.sp,
                                         color = Color(0xFF00E5FF)
                                     )
                                     Slider(
@@ -727,18 +848,17 @@ fun GlbImportPreviewDialog(
                                         modifier = Modifier
                                             .weight(1f)
                                             .padding(horizontal = 4.dp)
-                                            .height(28.dp)
+                                            .height(24.dp)
                                             .testTag("glb_preview_anim_scrubber_slider")
                                     )
                                     Text(
                                         text = String.format(Locale.US, "%.2fs", duration),
-                                        fontSize = 10.sp,
+                                        fontSize = 9.sp,
                                         color = Color(0xFF8B949E)
                                     )
 
-                                    Spacer(Modifier.width(6.dp))
+                                    Spacer(Modifier.width(4.dp))
 
-                                    // Toggle Speed (0.5x, 1x, 2x)
                                     OutlinedButton(
                                         onClick = {
                                             animSpeed = when (animSpeed) {
@@ -747,201 +867,171 @@ fun GlbImportPreviewDialog(
                                                 else -> 1.0f
                                             }
                                         },
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                                         modifier = Modifier
-                                            .height(30.dp)
+                                            .height(26.dp)
                                             .testTag("glb_preview_anim_speed_btn")
                                     ) {
-                                        Text("${animSpeed}x", fontSize = 10.sp)
+                                        Text("${animSpeed}x", fontSize = 9.sp)
                                     }
                                 }
-                            } else {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.Animation,
-                                        contentDescription = null,
-                                        tint = Color(0xFF8B949E),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = "Model GLB ini adalah Model Statis (tanpa trek animasi).",
-                                        fontSize = 11.sp,
-                                        color = Color(0xFF8B949E)
-                                    )
-                                }
                             }
                         }
-                    }
 
-                    // RIGHT COLUMN: Tabs Pengatur & Informasi Lengkap GLB (Bisa di-collapse untuk Maximize Viewport)
-                    if (!isPreviewMaximized) {
-                        Column(
+                        Spacer(Modifier.height(4.dp))
+
+                        // 3. TAB HEADER
+                        TabRow(
+                            selectedTabIndex = selectedRightTab,
+                            containerColor = Color(0xFF141A24),
+                            contentColor = Color(0xFF00E5FF),
                             modifier = Modifier
-                                .weight(1.0f)
-                                .fillMaxHeight()
-                                .background(Color(0xFF0E131C))
-                                .padding(4.dp)
+                                .fillMaxWidth()
+                                .height(30.dp)
+                                .clip(RoundedCornerShape(6.dp))
                         ) {
-                            TabRow(
-                                selectedTabIndex = selectedRightTab,
-                                containerColor = Color(0xFF141A24),
-                                contentColor = Color(0xFF00E5FF),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(34.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                            ) {
-                                Tab(
-                                    selected = selectedRightTab == 0,
-                                    onClick = { selectedRightTab = 0 },
-                                    text = { Text("Info Lengkap", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                            Tab(
+                                selected = selectedRightTab == 0,
+                                onClick = { selectedRightTab = 0 },
+                                text = { Text("Info Lengkap", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                            )
+                            Tab(
+                                selected = selectedRightTab == 1,
+                                onClick = { selectedRightTab = 1 },
+                                text = { Text("Pengaturan", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                            )
+                            Tab(
+                                selected = selectedRightTab == 2,
+                                onClick = { selectedRightTab = 2 },
+                                text = { Text("Hierarki & Tulang", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                            )
+                            Tab(
+                                selected = selectedRightTab == 3,
+                                onClick = { selectedRightTab = 3 },
+                                text = { Text("Animasi (${animations.size})", fontSize = 10.sp, fontWeight = FontWeight.SemiBold) }
+                            )
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        // 4. TAB CONTENT CONTAINER (EXPANDED DENGAN weight 1f)
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF0A0E14))
+                                .border(1.dp, Color(0xFF1B2433), RoundedCornerShape(6.dp))
+                                .padding(6.dp)
+                        ) {
+                            when (selectedRightTab) {
+                                0 -> ModelFullInfoTab(
+                                    inspection = inspection,
+                                    onCopyFullInfo = {
+                                        viewModel.copyToClipboard(
+                                            context,
+                                            inspection.formatFullInfoString(),
+                                            "Info Lengkap GLB"
+                                        )
+                                    }
                                 )
-                                Tab(
-                                    selected = selectedRightTab == 1,
-                                    onClick = { selectedRightTab = 1 },
-                                    text = { Text("Pengaturan", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                1 -> ImportSettingsTab(
+                                    inspection = inspection,
+                                    modelScale = modelScale,
+                                    onScaleChange = { modelScale = it },
+                                    selectedCollider = selectedCollider,
+                                    onColliderChange = { selectedCollider = it },
+                                    selectedRole = selectedRole,
+                                    onRoleChange = { selectedRole = it },
+                                    onCopyPath = {
+                                        viewModel.copyToClipboard(
+                                            context,
+                                            inspection.rawMetadata.recommendedFolder,
+                                            "Path Folder Rekomendasi"
+                                        )
+                                    },
+                                    onCopyFullGlbInfo = {
+                                        viewModel.copyToClipboard(
+                                            context,
+                                            inspection.formatFullInfoString(),
+                                            "Spesifikasi Lengkap GLB"
+                                        )
+                                    }
                                 )
-                                Tab(
-                                    selected = selectedRightTab == 2,
-                                    onClick = { selectedRightTab = 2 },
-                                    text = { Text("Hierarki & Tulang", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
-                                )
-                                Tab(
-                                    selected = selectedRightTab == 3,
-                                    onClick = { selectedRightTab = 3 },
-                                    text = { Text("Animasi (${animations.size})", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                2 -> NodeTreeAndSkeletonTab(inspection)
+                                3 -> AnimationsListTab(
+                                    animations = animations,
+                                    selectedAnimIndex = selectedAnimIndex,
+                                    onSelectAnimation = {
+                                        selectedAnimIndex = it
+                                        animCurrentTime = 0f
+                                        isPlayingAnim = true
+                                    }
                                 )
                             }
+                        }
 
-                            Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(6.dp))
 
-                            // TAB CONTENT CONTAINER
-                            Box(
+                        // 5. ACTION BUTTONS FOOTER
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(36.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = onDismiss,
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF0A0E14))
-                                    .border(1.dp, Color(0xFF1B2433), RoundedCornerShape(8.dp))
-                                    .padding(6.dp)
+                                    .height(36.dp)
+                                    .testTag("cancel_glb_import_button"),
+                                shape = RoundedCornerShape(6.dp)
                             ) {
-                                when (selectedRightTab) {
-                                    0 -> ModelFullInfoTab(
-                                        inspection = inspection,
-                                        onCopyFullInfo = {
-                                            viewModel.copyToClipboard(
-                                                context,
-                                                inspection.formatFullInfoString(),
-                                                "Info Lengkap GLB"
-                                            )
-                                        }
-                                    )
-                                    1 -> ImportSettingsTab(
-                                        inspection = inspection,
-                                        modelScale = modelScale,
-                                        onScaleChange = { modelScale = it },
-                                        selectedCollider = selectedCollider,
-                                        onColliderChange = { selectedCollider = it },
-                                        selectedRole = selectedRole,
-                                        onRoleChange = { selectedRole = it },
-                                        onCopyPath = {
-                                            viewModel.copyToClipboard(
-                                                context,
-                                                inspection.rawMetadata.recommendedFolder,
-                                                "Path Folder Rekomendasi"
-                                            )
-                                        },
-                                        onCopyFullGlbInfo = {
-                                            viewModel.copyToClipboard(
-                                                context,
-                                                inspection.formatFullInfoString(),
-                                                "Spesifikasi Lengkap GLB"
-                                            )
-                                        }
-                                    )
-                                    2 -> NodeTreeAndSkeletonTab(inspection)
-                                    3 -> AnimationsListTab(
-                                        animations = animations,
-                                        selectedAnimIndex = selectedAnimIndex,
-                                        onSelectAnimation = {
-                                            selectedAnimIndex = it
-                                            animCurrentTime = 0f
-                                            isPlayingAnim = true
-                                        }
-                                    )
-                                }
+                                Text("Batal", fontSize = 11.sp, color = Color(0xFFE6EDF3))
                             }
-                        }
-                    }
-                }
 
-                // 3. BOTTOM ACTION BAR
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .background(Color(0xFF141A24))
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                        modifier = Modifier
-                            .height(34.dp)
-                            .testTag("cancel_glb_import_button"),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Batal", fontSize = 12.sp, color = Color(0xFFE6EDF3))
-                    }
+                            OutlinedButton(
+                                onClick = {
+                                    inspection.file?.let { viewModel.importGlbToAssets(it) }
+                                    onDismiss()
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                modifier = Modifier
+                                    .weight(1.3f)
+                                    .height(36.dp)
+                                    .testTag("save_glb_to_assets_only_button"),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color(0xFF8B949E))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Simpan ke Assets", fontSize = 11.sp, color = Color(0xFFE6EDF3), maxLines = 1)
+                            }
 
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                inspection.file?.let { viewModel.importGlbToAssets(it) }
-                                onDismiss()
-                            },
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                            modifier = Modifier
-                                .height(34.dp)
-                                .testTag("save_glb_to_assets_only_button"),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color(0xFF8B949E))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Simpan ke Assets Saja", fontSize = 12.sp, color = Color(0xFFE6EDF3))
-                        }
-
-                        Button(
-                            onClick = {
-                                viewModel.spawnGlbFromInspection(
-                                    inspection = inspection,
-                                    colliderShape = selectedCollider,
-                                    customScale = modelScale,
-                                    role = selectedRole
-                                )
-                                onDismiss()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp),
-                            modifier = Modifier
-                                .height(34.dp)
-                                .testTag("confirm_spawn_glb_button"),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.ViewInAr, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Spawn ke Scene 3D ★", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Button(
+                                onClick = {
+                                    viewModel.spawnGlbFromInspection(
+                                        inspection = inspection,
+                                        colliderShape = selectedCollider,
+                                        customScale = modelScale,
+                                        role = selectedRole
+                                    )
+                                    onDismiss()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                modifier = Modifier
+                                    .weight(1.7f)
+                                    .height(36.dp)
+                                    .testTag("confirm_spawn_glb_button"),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(Icons.Default.ViewInAr, contentDescription = null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Spawn ke Scene 3D ★", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
+                            }
                         }
                     }
                 }
