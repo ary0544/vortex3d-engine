@@ -236,5 +236,71 @@ class ExampleRobolectricTest {
         assertNotNull(rb)
         assertTrue("Sphere should be marked as grounded when resting on floor", rb!!.isGrounded)
     }
+
+    @Test
+    fun `test formatFullInfoString generates complete GLB specification`() {
+        val bbox = com.example.engine.model.BoundingBox3D(
+            min = Vec3(-1f, 0f, -1f),
+            max = Vec3(1f, 2f, 1f),
+            center = Vec3(0f, 1f, 0f),
+            size = Vec3(2f, 2f, 2f)
+        )
+        val rawMeta = com.example.engine.model.GlbMetadata(
+            fileName = "warrior.glb",
+            fileSizeFormatted = "3.2 MB",
+            modelName = "WarriorModel",
+            meshCount = 2,
+            vertexCount = 1450,
+            triangleCount = 2800,
+            materialCount = 1,
+            textureCount = 1,
+            animationCount = 2,
+            roughness = 0.5f,
+            metallic = 0.2f,
+            baseColorHex = "#A0A0A0",
+            recommendedRole = "Kostum Karakter TPP (Dynamic Actor)",
+            recommendedFolder = "assets/characters/",
+            recommendationTip = "Cocok untuk karakter hero utama."
+        )
+        val anims = listOf(
+            com.example.engine.model.GlbAnimationInfo(0, "Idle", 2.0f, 4, 4),
+            com.example.engine.model.GlbAnimationInfo(1, "Run", 1.2f, 6, 6)
+        )
+        val bones = listOf(
+            com.example.engine.model.GlbNodeInfo(
+                index = 0,
+                name = "Hips",
+                type = com.example.engine.model.GlbNodeType.BONE,
+                children = listOf(
+                    com.example.engine.model.GlbNodeInfo(1, "Spine", com.example.engine.model.GlbNodeType.BONE)
+                )
+            )
+        )
+
+        val inspection = com.example.engine.model.GlbInspectionResult(
+            mesh = com.example.engine.model.Mesh.createCube("warrior_mesh"),
+            material = com.example.engine.model.Material.defaultMaterial(),
+            modelName = "WarriorModel",
+            boundingBox = bbox,
+            suggestedScale = 1.0f,
+            rootNodes = bones,
+            totalNodesCount = 2,
+            boneCount = 2,
+            animations = anims,
+            rawMetadata = rawMeta
+        )
+
+        val text = inspection.formatFullInfoString()
+        assertTrue(text.contains("warrior.glb"))
+        assertTrue(text.contains("WarriorModel"))
+        assertTrue(text.contains("[GEOMETRI & MESH]"))
+        assertTrue(text.contains("Bounding Box Size"))
+        assertTrue(text.contains("[SKELETON & RIGGING TULANG]"))
+        assertTrue(text.contains("Hips"))
+        assertTrue(text.contains("[KLIP ANIMASI TERTANAM]"))
+        assertTrue(text.contains("Idle"))
+        assertTrue(text.contains("Run"))
+        assertTrue(text.contains("assets/characters/"))
+    }
 }
 

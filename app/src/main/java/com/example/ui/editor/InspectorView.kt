@@ -21,10 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Transform
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,6 +65,7 @@ fun InspectorView(
     viewModel: EngineViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val scene by viewModel.scene.collectAsState()
     val selectedId by viewModel.selectedEntityId.collectAsState()
     val allScripts by viewModel.scriptsState.collectAsState()
@@ -491,7 +494,41 @@ fun InspectorView(
                         valueRange = 0f..1f
                     )
 
+                    val mesh = viewModel.assetManager.meshes[mr.meshId]
+                    if (mesh != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Mesh: ${mesh.name} (${mesh.vertexCount} v, ${mesh.triangleCount} tris)",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            IconButton(
+                                onClick = {
+                                    val meshInfo = buildString {
+                                        appendLine("=== INFORMASI MESH ENTITAS 3D ===")
+                                        appendLine("Entitas: ${selectedEntity.name} (ID: ${selectedEntity.id})")
+                                        appendLine("Mesh ID: ${mr.meshId} (${mesh.name})")
+                                        appendLine("Vertices: ${mesh.vertexCount}, Triangles: ${mesh.triangleCount}")
+                                        appendLine("Posisi: (${selectedEntity.transform.position.x}, ${selectedEntity.transform.position.y}, ${selectedEntity.transform.position.z})")
+                                        appendLine("Skala: (${selectedEntity.transform.scale.x}, ${selectedEntity.transform.scale.y}, ${selectedEntity.transform.scale.z})")
+                                        appendLine("Material: ${material.name} (Roughness: ${material.roughness}, Metallic: ${material.metallic})")
+                                    }
+                                    viewModel.copyToClipboard(context, meshInfo, "Info Mesh 3D")
+                                },
+                                modifier = Modifier.size(24.dp).testTag("copy_inspector_mesh_info_button")
+                            ) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Salin Info Model", modifier = Modifier.size(14.dp), tint = Color(0xFF00E5FF))
+                            }
+                        }
+                    }
+
                     if (shader != null) {
+                        Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = { viewModel.editShader(shader) },
                             modifier = Modifier.fillMaxWidth().testTag("open_shader_studio_button")

@@ -235,8 +235,39 @@ fun GlbImportPreviewDialog(
                         }
                     }
 
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Tutup", tint = Color.White)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val fullInfo = inspection.formatFullInfoString()
+                                viewModel.copyToClipboard(context, fullInfo, "Info Lengkap GLB")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF238636)),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier
+                                .height(32.dp)
+                                .testTag("copy_full_glb_info_header_button")
+                        ) {
+                            Icon(
+                                Icons.Default.ContentCopy,
+                                contentDescription = "Salin Info Lengkap GLB",
+                                modifier = Modifier.size(14.dp),
+                                tint = Color.White
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "Salin Info Lengkap GLB",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Tutup", tint = Color.White)
+                        }
                     }
                 }
 
@@ -346,47 +377,64 @@ fun GlbImportPreviewDialog(
                                 val baseColor = Color(inspection.material.albedoColor)
                                 val lightDir = Vec3(0.5f, 1.0f, 0.4f).normalized()
 
-                                // Project semua vertex
-                                val projected = Array(mesh.vertices.size) { i ->
-                                    val v = mesh.vertices[i]
+                                // Project semua vertex menggunakan flat FloatArray (Zero-GC, tanpa alokasi obyek Triple)
+                                val vertCount = mesh.vertices.size
+                                val projX = FloatArray(vertCount)
+                                val projY = FloatArray(vertCount)
+                                val projZ = FloatArray(vertCount)
+                                for (vi in 0 until vertCount) {
+                                    val v = mesh.vertices[vi]
                                     val centeredPos = v.position - centerOffset
                                     val ndc = viewProj.transformPoint(centeredPos)
-                                    val sx = (ndc.x * 0.5f + 0.5f) * w
-                                    val sy = (-ndc.y * 0.5f + 0.5f) * h
-                                    Triple(sx, sy, ndc.z)
+                                    projX[vi] = (ndc.x * 0.5f + 0.5f) * w
+                                    projY[vi] = (-ndc.y * 0.5f + 0.5f) * h
+                                    projZ[vi] = ndc.z
                                 }
+
+                                val triCount = mesh.triangles.size
+                                // Adaptive LOD step: Jika model sangat padat (>900 segitiga), render secara proporsional agar 60 FPS tetap mulus
+                                val triStep = if (triCount > 900) maxOf(1, triCount / 750) else 1
 
                                 if (isWireframe) {
                                     val wfColor = Color(0xFF00E5FF).copy(alpha = 0.7f)
-                                    val path = Path()
-                                    for (tri in mesh.triangles) {
-                                        val p0 = projected.getOrNull(tri.i0) ?: continue
-                                        val p1 = projected.getOrNull(tri.i1) ?: continue
-                                        val p2 = projected.getOrNull(tri.i2) ?: continue
-                                        if (p0.third !in -1f..1f && p1.third !in -1f..1f && p2.third !in -1f..1f) continue
+                                    val wfPath = Path()
+                                    for (ti in 0 until triCount step triStep) {
+                                        val tri = mesh.triangles[ti]
+                                        val z0 = projZ[tri.i0]
+                                        val z1 = projZ[tri.i1]
+                                        val z2 = projZ[tri.i2]
+                                        if (z0 !in -1f..1f && z1 !in -1f..1f && z2 !in -1f..1f) continue
 
-                                        path.moveTo(p0.first, p0.second)
-                                        path.lineTo(p1.first, p1.second)
-                                        path.lineTo(p2.first, p2.second)
-                                        path.close()
+                                        wfPath.moveTo(projX[tri.i0], projY[tri.i0])
+                                        wfPath.lineTo(projX[tri.i1], projY[tri.i1])
+                                        wfPath.lineTo(projX[tri.i2], projY[tri.i2])
+                                        wfPath.close()
                                     }
-                                    drawPath(path, color = wfColor, style = Stroke(width = 1f))
+                                    drawPath(wfPath, color = wfColor, style = Stroke(width = 1f))
                                 } else {
-                                    // Shaded Solid Triangles
-                                    val path = Path()
-                                    for (tri in mesh.triangles) {
-                                        val p0 = projected.getOrNull(tri.i0) ?: continue
-                                        val p1 = projected.getOrNull(tri.i1) ?: continue
-                                        val p2 = projected.getOrNull(tri.i2) ?: continue
+                                    // Shaded Solid Triangles dengan Single Reusable Path
+                                    val triPath = Path()
+                                    for (ti in 0 until triCount step triStep) {
+                                        val tri = mesh.triangles[ti]
+                                        val z0 = projZ[tri.i0]
+                                        val z1 = projZ[tri.i1]
+                                        val z2 = projZ[tri.i2]
 
-                                        // Frustum check
-                                        if (p0.third < -1f || p0.third > 1f || p1.third < -1f || p1.third > 1f || p2.third < -1f || p2.third > 1f) continue
+                                        // Frustum check cepat
+                                        if (z0 < -1f || z0 > 1f || z1 < -1f || z1 > 1f || z2 < -1f || z2 > 1f) continue
 
-                                        // Backface Culling sederhana
-                                        val edge1X = p1.first - p0.first
-                                        val edge1Y = p1.second - p0.second
-                                        val edge2X = p2.first - p0.first
-                                        val edge2Y = p2.second - p0.second
+                                        val x0 = projX[tri.i0]
+                                        val y0 = projY[tri.i0]
+                                        val x1 = projX[tri.i1]
+                                        val y1 = projY[tri.i1]
+                                        val x2 = projX[tri.i2]
+                                        val y2 = projY[tri.i2]
+
+                                        // Backface Culling 2D cepat
+                                        val edge1X = x1 - x0
+                                        val edge1Y = y1 - y0
+                                        val edge2X = x2 - x0
+                                        val edge2Y = y2 - y0
                                         val crossZ = edge1X * edge2Y - edge1Y * edge2X
                                         if (crossZ <= 0f) continue // backface
 
@@ -398,12 +446,12 @@ fun GlbImportPreviewDialog(
                                             blue = (baseColor.blue * diffuse).coerceIn(0f, 1f)
                                         )
 
-                                        path.reset()
-                                        path.moveTo(p0.first, p0.second)
-                                        path.lineTo(p1.first, p1.second)
-                                        path.lineTo(p2.first, p2.second)
-                                        path.close()
-                                        drawPath(path, color = shadeColor)
+                                        triPath.reset()
+                                        triPath.moveTo(x0, y0)
+                                        triPath.lineTo(x1, y1)
+                                        triPath.lineTo(x2, y2)
+                                        triPath.close()
+                                        drawPath(triPath, color = shadeColor)
                                     }
                                 }
 
@@ -472,6 +520,22 @@ fun GlbImportPreviewDialog(
                                         modifier = Modifier.height(26.dp)
                                     )
                                 }
+                                FilterChip(
+                                    selected = false,
+                                    onClick = {
+                                        val fullInfo = inspection.formatFullInfoString()
+                                        viewModel.copyToClipboard(context, fullInfo, "Info Lengkap GLB")
+                                    },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(11.dp), tint = Color(0xFF00E5FF))
+                                            Spacer(Modifier.width(3.dp))
+                                            Text("Salin Info", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                                        }
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(containerColor = Color(0xFF1F2B3E)),
+                                    modifier = Modifier.height(26.dp).testTag("copy_glb_info_viewport_chip")
+                                )
                                 IconButton(
                                     onClick = {
                                         yawState = 40f
@@ -718,6 +782,13 @@ fun GlbImportPreviewDialog(
                                             context,
                                             inspection.rawMetadata.recommendedFolder,
                                             "Path Folder Rekomendasi"
+                                        )
+                                    },
+                                    onCopyFullGlbInfo = {
+                                        viewModel.copyToClipboard(
+                                            context,
+                                            inspection.formatFullInfoString(),
+                                            "Spesifikasi Lengkap GLB"
                                         )
                                     }
                                 )
@@ -982,7 +1053,8 @@ private fun ImportSettingsTab(
     onColliderChange: (ColliderShape) -> Unit,
     selectedRole: String,
     onRoleChange: (String) -> Unit,
-    onCopyPath: () -> Unit
+    onCopyPath: () -> Unit,
+    onCopyFullGlbInfo: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -1124,6 +1196,58 @@ private fun ImportSettingsTab(
                     color = Color(0xFFC9D1D9),
                     lineHeight = 12.sp
                 )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // 5. Spesifikasi Lengkap Model GLB & Salin untuk AI
+        Card(
+            modifier = Modifier.fillMaxWidth().testTag("glb_specifications_card"),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161F2E)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF238636).copy(alpha = 0.6f)),
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Spesifikasi Lengkap GLB", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF238636).copy(alpha = 0.25f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text("Siap Disalin ke AI", color = Color(0xFF4CAF50), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Dapatkan seluruh parameter detail: mesh, vertices, triangles, bounding box, skeleton tulang, daftar animasi, material PBR, dan rekomendasi folder.",
+                    fontSize = 10.sp,
+                    color = Color(0xFF8B949E),
+                    lineHeight = 14.sp
+                )
+
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onCopyFullGlbInfo,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF238636)),
+                    modifier = Modifier.fillMaxWidth().height(36.dp).testTag("copy_full_glb_spec_button"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Salin Info Lengkap GLB (Format AI)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
             }
         }
     }

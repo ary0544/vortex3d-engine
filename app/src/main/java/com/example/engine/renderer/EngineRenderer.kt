@@ -224,9 +224,12 @@ object EngineRenderer {
                 vertexBuffer[offset + 9] = wz
             }
 
-            // Build triangles into pool
+            // Build triangles into pool with adaptive LOD for dense meshes (maintains constant 60 FPS)
             val isSelectedEntity = entity.id == selectedEntityId
-            for (tri in mesh.triangles) {
+            val triStride = if (mesh.triangles.size > 1500) max(1, mesh.triangles.size / 1200) else 1
+            for (ti in 0 until mesh.triangles.size step triStride) {
+                if (triangleCount >= 2500) break
+                val tri = mesh.triangles[ti]
                 val o0 = tri.i0 * VERTEX_STRIDE
                 val o1 = tri.i1 * VERTEX_STRIDE
                 val o2 = tri.i2 * VERTEX_STRIDE

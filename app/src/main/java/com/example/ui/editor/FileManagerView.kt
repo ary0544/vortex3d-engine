@@ -531,7 +531,7 @@ fun FileManagerView(
                         Spacer(Modifier.height(6.dp))
 
                         // Tombol Salin Info Lengkap untuk AI
-                        OutlinedButton(
+                        Button(
                             onClick = {
                                 val fullInfo = buildString {
                                     appendLine("=== INFORMASI MODEL 3D GLB ===")
@@ -546,12 +546,13 @@ fun FileManagerView(
                                 }
                                 viewModel.copyToClipboard(context, fullInfo, "Spesifikasi Lengkap GLB")
                             },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF238636)),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.fillMaxWidth().height(28.dp)
+                            modifier = Modifier.fillMaxWidth().height(32.dp).testTag("copy_glb_info_filemanager_button")
                         ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color(0xFF00E5FF))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Salin Info Lengkap (untuk AI)", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color.White)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Salin Info Lengkap GLB (untuk AI)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     } else if (fileItem.extension == "lua") {
                         Text("Script Game Lua. Buka di editor kode IDE Vortex3D?", fontSize = 12.sp)

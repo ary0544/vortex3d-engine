@@ -81,7 +81,61 @@ data class GlbInspectionResult(
     val animations: List<GlbAnimationInfo>,
     val rawMetadata: GlbMetadata,
     val file: File? = null
-)
+) {
+    fun formatFullInfoString(): String {
+        return buildString {
+            appendLine("=== INFORMASI LENGKAP MODEL 3D GLB ===")
+            appendLine("Nama File: ${rawMetadata.fileName} (${rawMetadata.fileSizeFormatted})")
+            appendLine("Nama Model: $modelName")
+            file?.let { appendLine("Lokasi Path: ${it.absolutePath}") }
+            appendLine()
+            appendLine("[GEOMETRI & MESH]")
+            appendLine("• Total Vertices: ${mesh.vertexCount}")
+            appendLine("• Total Triangles: ${mesh.triangleCount}")
+            appendLine("• Jumlah Submesh: ${rawMetadata.meshCount}")
+            appendLine("• Bounding Box Size: W: ${String.format(java.util.Locale.US, "%.2f", boundingBox.size.x)}m × H: ${String.format(java.util.Locale.US, "%.2f", boundingBox.size.y)}m × D: ${String.format(java.util.Locale.US, "%.2f", boundingBox.size.z)}m")
+            appendLine("• Dimensi Terbesar: ${String.format(java.util.Locale.US, "%.2f", boundingBox.maxDimension)}m")
+            appendLine("• Titik Tengah (Center): (${String.format(java.util.Locale.US, "%.2f", boundingBox.center.x)}, ${String.format(java.util.Locale.US, "%.2f", boundingBox.center.y)}, ${String.format(java.util.Locale.US, "%.2f", boundingBox.center.z)})")
+            appendLine("• Rekomendasi Skala Impor: ${String.format(java.util.Locale.US, "%.3fx", suggestedScale)}")
+            appendLine()
+            appendLine("[MATERIAL & PBR SHADING]")
+            appendLine("• Warna Dasar (BaseColor): ${rawMetadata.baseColorHex}")
+            appendLine("• Roughness: ${rawMetadata.roughness}")
+            appendLine("• Metallic: ${rawMetadata.metallic}")
+            appendLine("• Jumlah Material: ${rawMetadata.materialCount}")
+            appendLine("• Jumlah Tekstur: ${rawMetadata.textureCount}")
+            appendLine()
+            appendLine("[SKELETON & RIGGING TULANG]")
+            appendLine("• Jumlah Tulang (Bones): $boneCount")
+            appendLine("• Total Nodes: $totalNodesCount")
+            val boneNames = mutableListOf<String>()
+            fun collectBoneNames(node: GlbNodeInfo) {
+                if (node.type == GlbNodeType.BONE) boneNames.add(node.name)
+                node.children.forEach { collectBoneNames(it) }
+            }
+            rootNodes.forEach { collectBoneNames(it) }
+            if (boneNames.isNotEmpty()) {
+                appendLine("• Daftar Tulang (${boneNames.size}): ${boneNames.take(15).joinToString(", ")}${if (boneNames.size > 15) " ... (+${boneNames.size - 15} lainnya)" else ""}")
+            }
+            appendLine()
+            appendLine("[KLIP ANIMASI TERTANAM]")
+            appendLine("• Jumlah Trek Animasi: ${animations.size}")
+            if (animations.isEmpty()) {
+                appendLine("• (Model Statis / Tanpa Klip Animasi)")
+            } else {
+                animations.forEachIndexed { i, anim ->
+                    appendLine("  ${i + 1}. \"${anim.name}\" - Durasi: ${String.format(java.util.Locale.US, "%.2fs", anim.duration)}, Saluran: ${anim.channelsCount}, Samplers: ${anim.samplersCount}")
+                }
+            }
+            appendLine()
+            appendLine("[REKOMENDASI PENGGUNAAN ENGINE]")
+            appendLine("• Peran Rekomendasi: ${rawMetadata.recommendedRole}")
+            appendLine("• Folder Penempatan: ${rawMetadata.recommendedFolder}")
+            appendLine("• Petunjuk: ${rawMetadata.recommendationTip}")
+            appendLine("======================================")
+        }
+    }
+}
 
 object GlbParser {
     private const val GLB_MAGIC = 0x46546C67 // "glTF"
