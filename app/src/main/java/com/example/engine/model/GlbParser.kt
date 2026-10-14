@@ -288,21 +288,32 @@ object GlbParser {
         var metallic = 0.2f
         var baseColorHex = "#42A5F5"
 
-        // Parse Material PBR
+        // Parse ALL Materials PBR (Multi-material support)
+        val materialColors = mutableListOf<Long>()
         if (materials != null && materials.length() > 0) {
-            val matObj = materials.getJSONObject(0)
-            val pbr = matObj.optJSONObject("pbrMetallicRoughness")
-            if (pbr != null) {
-                roughness = pbr.optDouble("roughnessFactor", 0.5).toFloat()
-                metallic = pbr.optDouble("metallicFactor", 0.2).toFloat()
-                val baseColor = pbr.optJSONArray("baseColorFactor")
-                if (baseColor != null && baseColor.length() >= 3) {
-                    val r = (baseColor.getDouble(0) * 255).toInt().coerceIn(0, 255)
-                    val g = (baseColor.getDouble(1) * 255).toInt().coerceIn(0, 255)
-                    val b = (baseColor.getDouble(2) * 255).toInt().coerceIn(0, 255)
-                    albedoColor = ((0xFFL shl 24) or (r.toLong() shl 16) or (g.toLong() shl 8) or b.toLong())
-                    baseColorHex = String.format("#%02X%02X%02X", r, g, b)
+            for (mIdx in 0 until materials.length()) {
+                val matObj = materials.getJSONObject(mIdx)
+                var matColor = 0xFFCCCCCCL
+                val pbr = matObj.optJSONObject("pbrMetallicRoughness")
+                if (pbr != null) {
+                    if (mIdx == 0) {
+                        roughness = pbr.optDouble("roughnessFactor", 0.5).toFloat()
+                        metallic = pbr.optDouble("metallicFactor", 0.2).toFloat()
+                    }
+                    val baseColor = pbr.optJSONArray("baseColorFactor")
+                    if (baseColor != null && baseColor.length() >= 3) {
+                        val r = (baseColor.getDouble(0) * 255).toInt().coerceIn(0, 255)
+                        val g = (baseColor.getDouble(1) * 255).toInt().coerceIn(0, 255)
+                        val b = (baseColor.getDouble(2) * 255).toInt().coerceIn(0, 255)
+                        val a = if (baseColor.length() >= 4) (baseColor.getDouble(3) * 255).toInt().coerceIn(0, 255) else 255
+                        matColor = ((a.toLong() shl 24) or (r.toLong() shl 16) or (g.toLong() shl 8) or b.toLong())
+                        if (mIdx == 0) {
+                            albedoColor = matColor
+                            baseColorHex = String.format("#%02X%02X%02X", r, g, b)
+                        }
+                    }
                 }
+                materialColors.add(matColor)
             }
         }
 
@@ -344,6 +355,12 @@ object GlbParser {
                 for (p in 0 until primitives.length()) {
                     val prim = primitives.getJSONObject(p)
                     val attributes = prim.optJSONObject("attributes") ?: continue
+                    val materialIdx = prim.optInt("material", -1)
+                    val primColor = if (materialIdx in materialColors.indices) {
+                        materialColors[materialIdx]
+                    } else {
+                        albedoColor
+                    }
 
                     val posAccessorIdx = attributes.optInt("POSITION", -1)
                     if (posAccessorIdx < 0) continue
@@ -370,9 +387,10 @@ object GlbParser {
                         val pos = positions[i]
                         val norm = normals.getOrElse(i) { Vec3.UP }
                         val (u, v) = uvs.getOrElse(i) { Pair(0f, 0f) }
-                        vertices.add(Vertex(pos, norm, u, v))
+                        vertices.add(Vertex(pos, norm, u, v, color = primColor))
                     }
 
+                    val triMatIdx = if (materialIdx >= 0) materialIdx else 0
                     if (indicesAccessorIdx >= 0) {
                         val idxList = readIndicesList(indicesAccessorIdx, accessors, bufferViews, binBuffer)
                         for (i in 0 until idxList.size - 2 step 3) {
@@ -380,7 +398,9 @@ object GlbParser {
                                 Triangle(
                                     baseVertexIndex + idxList[i],
                                     baseVertexIndex + idxList[i + 1],
-                                    baseVertexIndex + idxList[i + 2]
+                                    baseVertexIndex + idxList[i + 2],
+                                    materialIndex = triMatIdx,
+                                    color = primColor
                                 )
                             )
                         }
@@ -390,7 +410,9 @@ object GlbParser {
                                 Triangle(
                                     baseVertexIndex + i,
                                     baseVertexIndex + i + 1,
-                                    baseVertexIndex + i + 2
+                                    baseVertexIndex + i + 2,
+                                    materialIndex = triMatIdx,
+                                    color = primColor
                                 )
                             )
                         }

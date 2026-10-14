@@ -193,6 +193,27 @@ fun GlbImportPreviewDialog(
         cameraRevision++
     }
 
+    fun setSideView() {
+        yawState = 90f
+        pitchState = 0f
+        previewCamera.yawDegrees = yawState
+        previewCamera.pitchDegrees = pitchState
+        cameraRevision++
+    }
+
+    var isInteracting by remember { mutableStateOf(false) }
+
+    val textureBitmap = inspection.textureBitmap
+    val textureData = remember(textureBitmap) {
+        textureBitmap?.let { bmp ->
+            val tw = bmp.width
+            val th = bmp.height
+            val pixels = IntArray(tw * th)
+            bmp.getPixels(pixels, 0, tw, 0, 0, tw, th)
+            Triple(pixels, tw, th)
+        }
+    }
+
     // Tab Pengatur di Sisi Kanan (0: Info Lengkap, 1: Pengaturan Impor, 2: Hierarki & Tulang, 3: Animasi)
     var selectedRightTab by remember { mutableIntStateOf(if (inspection.boneCount > 0 || inspection.totalNodesCount > 0) 2 else 0) }
 
@@ -380,81 +401,87 @@ fun GlbImportPreviewDialog(
                             .pointerInput(twoFingerMode, invertX, invertY) {
                                 awaitEachGesture {
                                     awaitFirstDown(requireUnconsumed = false)
+                                    isInteracting = true
                                     var prevDistance = 0f
                                     var prevCenter = Offset.Zero
                                     var prevSinglePos: Offset? = null
 
-                                    do {
-                                        val event = awaitPointerEvent()
-                                        val activePointers = event.changes.filter { it.pressed }
+                                    try {
+                                        do {
+                                            val event = awaitPointerEvent()
+                                            val activePointers = event.changes.filter { it.pressed }
 
-                                        if (activePointers.size >= 2) {
-                                            // Reset single pointer state saat multi-finger aktif
-                                            prevSinglePos = null
+                                            if (activePointers.size >= 2) {
+                                                // Reset single pointer state saat multi-finger aktif
+                                                prevSinglePos = null
 
-                                            val p1 = activePointers[0].position
-                                            val p2 = activePointers[1].position
-                                            val currentDist = hypot(p1.x - p2.x, p1.y - p2.y)
-                                            val currentCenter = Offset((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f)
+                                                val p1 = activePointers[0].position
+                                                val p2 = activePointers[1].position
+                                                val currentDist = hypot(p1.x - p2.x, p1.y - p2.y)
+                                                val currentCenter = Offset((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f)
 
-                                            if (prevDistance > 0f) {
-                                                // 1. Pinch zoom (perbesar / perkecil jarak kamera)
-                                                val zoom = currentDist / prevDistance
-                                                if (zoom > 0.01f && zoom < 100f) {
-                                                    distanceState = (distanceState / zoom).coerceIn(1.0f, 35.0f)
-                                                    previewCamera.distance = distanceState
+                                                if (prevDistance > 0f) {
+                                                    // 1. Pinch zoom (perbesar / perkecil jarak kamera)
+                                                    val zoom = currentDist / prevDistance
+                                                    if (zoom > 0.01f && zoom < 100f) {
+                                                        distanceState = (distanceState / zoom).coerceIn(1.0f, 35.0f)
+                                                        previewCamera.distance = distanceState
+                                                    }
+
+                                                    // 2. Geser 2-jari (Pan geser posisi kamera atau Orbit sesuai preferensi)
+                                                    val panDelta = currentCenter - prevCenter
+                                                    if (panDelta != Offset.Zero) {
+                                                        val signX = if (invertX) -1f else 1f
+                                                        val signY = if (invertY) -1f else 1f
+                                                        if (twoFingerMode == "pan") {
+                                                            val factor = 0.005f * (distanceState / 4f)
+                                                            previewCamera.pan(-panDelta.x * factor * signX, panDelta.y * factor * signY)
+                                                        } else {
+                                                            val factor = 0.4f
+                                                            yawState = (yawState + panDelta.x * factor * signX) % 360f
+                                                            pitchState = (pitchState - panDelta.y * factor * signY).coerceIn(-85f, 85f)
+                                                            previewCamera.yawDegrees = yawState
+                                                            previewCamera.pitchDegrees = pitchState
+                                                        }
+                                                        cameraRevision++
+                                                    }
                                                 }
 
-                                                // 2. Geser 2-jari (Pan geser posisi kamera atau Orbit sesuai preferensi)
-                                                val panDelta = currentCenter - prevCenter
-                                                if (panDelta != Offset.Zero) {
-                                                    val signX = if (invertX) -1f else 1f
-                                                    val signY = if (invertY) -1f else 1f
-                                                    if (twoFingerMode == "pan") {
-                                                        val factor = 0.005f * (distanceState / 4f)
-                                                        previewCamera.pan(-panDelta.x * factor * signX, panDelta.y * factor * signY)
-                                                    } else {
-                                                        val factor = 0.4f
-                                                        yawState = (yawState + panDelta.x * factor * signX) % 360f
-                                                        pitchState = (pitchState - panDelta.y * factor * signY).coerceIn(-85f, 85f)
+                                                prevDistance = currentDist
+                                                prevCenter = currentCenter
+                                                activePointers.forEach { it.consume() }
+                                            } else if (activePointers.size == 1) {
+                                                // Reset 2-finger state saat hanya 1 pointer aktif
+                                                prevDistance = 0f
+                                                prevCenter = Offset.Zero
+
+                                                // 1-JARI: KONTROL ORBIT ROTASI KAMERA (YAW & PITCH)
+                                                val curPos = activePointers[0].position
+                                                if (prevSinglePos != null) {
+                                                    val delta = curPos - prevSinglePos
+                                                    if (delta != Offset.Zero) {
+                                                        val signX = if (invertX) -1f else 1f
+                                                        val signY = if (invertY) -1f else 1f
+                                                        val factor = 0.45f
+                                                        yawState = (yawState + delta.x * factor * signX) % 360f
+                                                        pitchState = (pitchState - delta.y * factor * signY).coerceIn(-85f, 85f)
                                                         previewCamera.yawDegrees = yawState
                                                         previewCamera.pitchDegrees = pitchState
+                                                        cameraRevision++
                                                     }
-                                                    cameraRevision++
                                                 }
+                                                prevSinglePos = curPos
+                                                activePointers[0].consume()
+                                            } else {
+                                                prevSinglePos = null
+                                                prevDistance = 0f
+                                                prevCenter = Offset.Zero
                                             }
-
-                                            prevDistance = currentDist
-                                            prevCenter = currentCenter
-                                            activePointers.forEach { it.consume() }
-                                        } else if (activePointers.size == 1) {
-                                            // Reset 2-finger state saat hanya 1 pointer aktif
-                                            prevDistance = 0f
-                                            prevCenter = Offset.Zero
-
-                                            // 1-JARI: KONTROL ORBIT ROTASI KAMERA (YAW & PITCH)
-                                            val curPos = activePointers[0].position
-                                            if (prevSinglePos != null) {
-                                                val delta = curPos - prevSinglePos
-                                                if (delta != Offset.Zero) {
-                                                    val signX = if (invertX) -1f else 1f
-                                                    val signY = if (invertY) -1f else 1f
-                                                    val factor = 0.45f
-                                                    yawState = (yawState + delta.x * factor * signX) % 360f
-                                                    pitchState = (pitchState - delta.y * factor * signY).coerceIn(-85f, 85f)
-                                                    previewCamera.yawDegrees = yawState
-                                                    previewCamera.pitchDegrees = pitchState
-                                                    cameraRevision++
-                                                }
-                                            }
-                                            prevSinglePos = curPos
-                                            activePointers[0].consume()
-                                        } else {
-                                            prevSinglePos = null
-                                            prevDistance = 0f
-                                            prevCenter = Offset.Zero
-                                        }
-                                    } while (event.changes.any { it.pressed })
+                                        } while (event.changes.any { it.pressed })
+                                    } finally {
+                                        isInteracting = false
+                                        cameraRevision++
+                                    }
                                 }
                             }
                     ) {
@@ -523,7 +550,6 @@ fun GlbImportPreviewDialog(
 
                             for (vi in 0 until vertCount) {
                                 val v = mesh.vertices[vi]
-                                // Normalisasi centering dan autofit agar model terlihat jelas
                                 val centeredPos = (v.position - centerOffset) * fitScale
                                 val ndc = viewProj.transformPoint(centeredPos)
                                 projX[vi] = (ndc.x * 0.5f + 0.5f) * w
@@ -536,7 +562,8 @@ fun GlbImportPreviewDialog(
                             if (isWireframe) {
                                 val wfColor = Color(0xFF00E5FF).copy(alpha = 0.8f)
                                 val wfPath = Path()
-                                for (ti in 0 until triCount) {
+                                val wfStep = if (isInteracting && triCount > 4000) 2 else 1
+                                for (ti in 0 until triCount step wfStep) {
                                     val tri = mesh.triangles[ti]
                                     val z0 = projZ[tri.i0]
                                     val z1 = projZ[tri.i1]
@@ -550,18 +577,12 @@ fun GlbImportPreviewDialog(
                                 }
                                 drawPath(wfPath, color = wfColor, style = Stroke(width = 1f))
                             } else {
-                                // Depth-Sorted Solid Shading (Painter's Algorithm)
-                                // Sortir segitiga dari Z terjauh ke Z terdekat agar permukaan solid sempurna
-                                val sortedIndices = Array(triCount) { it }
+                                // 1. FAST BACKFACE CULLING SEBELUM SORTING
+                                // Memangkas ~50% segitiga belakang, menghemat hingga 3x performa sorting!
+                                val visibleTriangles = ArrayList<Int>(triCount / 2 + 1)
                                 val avgZ = FloatArray(triCount)
-                                for (ti in 0 until triCount) {
-                                    val tri = mesh.triangles[ti]
-                                    avgZ[ti] = (projZ[tri.i0] + projZ[tri.i1] + projZ[tri.i2]) / 3f
-                                }
-                                sortedIndices.sortByDescending { avgZ[it] }
 
-                                val triPath = Path()
-                                for (ti in sortedIndices) {
+                                for (ti in 0 until triCount) {
                                     val tri = mesh.triangles[ti]
                                     val z0 = projZ[tri.i0]
                                     val z1 = projZ[tri.i1]
@@ -576,23 +597,83 @@ fun GlbImportPreviewDialog(
                                     val x2 = projX[tri.i2]
                                     val y2 = projY[tri.i2]
 
-                                    // Screen-space 2D backface culling: discard backward-facing triangles
+                                    // Screen-space 2D backface culling
                                     val cross2d = (x1 - x0) * (y2 - y0) - (y1 - y0) * (x2 - x0)
                                     if (cross2d <= 0f) continue
 
+                                    // Viewport bounds clipping
                                     if ((x0 < -100f && x1 < -100f && x2 < -100f) ||
                                         (x0 > w + 100f && x1 > w + 100f && x2 > w + 100f) ||
                                         (y0 < -100f && y1 < -100f && y2 < -100f) ||
                                         (y0 > h + 100f && y1 > h + 100f && y2 > h + 100f)
                                     ) continue
 
+                                    avgZ[ti] = (z0 + z1 + z2) * 0.33333f
+                                    visibleTriangles.add(ti)
+                                }
+
+                                // 2. DEPTH SORTING (Painter's Algorithm)
+                                visibleTriangles.sortWith { a, b -> avgZ[b].compareTo(avgZ[a]) }
+
+                                // 3. ADAPTIVE LEVEL OF DETAIL (LOD) SAAT GESTUR SENTUH
+                                val totalVisible = visibleTriangles.size
+                                val lodStep = if (isInteracting && totalVisible > 5000) 3 else if (isInteracting && totalVisible > 2500) 2 else 1
+
+                                val triPath = Path()
+                                val texPixels = textureData?.first
+                                val texW = textureData?.second ?: 0
+                                val texH = textureData?.third ?: 0
+
+                                for (i in 0 until totalVisible step lodStep) {
+                                    val ti = visibleTriangles[i]
+                                    val tri = mesh.triangles[ti]
                                     val v0 = mesh.vertices[tri.i0]
+                                    val v1 = mesh.vertices[tri.i1]
+                                    val v2 = mesh.vertices[tri.i2]
+
+                                    val x0 = projX[tri.i0]
+                                    val y0 = projY[tri.i0]
+                                    val x1 = projX[tri.i1]
+                                    val y1 = projY[tri.i1]
+                                    val x2 = projX[tri.i2]
+                                    val y2 = projY[tri.i2]
+
+                                    // Sampling warna dari Tekstur UV Atlas, Multi-Material Submesh, atau BaseColor
+                                    var r = baseColor.red
+                                    var g = baseColor.green
+                                    var b = baseColor.blue
+
+                                    if (texPixels != null && texW > 0 && texH > 0) {
+                                        // Sampling UV Atlas di pusat segitiga
+                                        val u = ((v0.uvU + v1.uvU + v2.uvU) * 0.33333f)
+                                        val v = ((v0.uvV + v1.uvV + v2.uvV) * 0.33333f)
+                                        val wrappedU = (u - kotlin.math.floor(u)).coerceIn(0f, 0.9999f)
+                                        val wrappedV = (v - kotlin.math.floor(v)).coerceIn(0f, 0.9999f)
+                                        val px = (wrappedU * texW).toInt().coerceIn(0, texW - 1)
+                                        val py = (wrappedV * texH).toInt().coerceIn(0, texH - 1)
+                                        val argb = texPixels[py * texW + px]
+                                        r = ((argb ushr 16) and 0xFF) / 255f
+                                        g = ((argb ushr 8) and 0xFF) / 255f
+                                        b = (argb and 0xFF) / 255f
+                                    } else if (tri.color != 0L) {
+                                        val c = tri.color
+                                        r = ((c ushr 16) and 0xFF) / 255f
+                                        g = ((c ushr 8) and 0xFF) / 255f
+                                        b = (c and 0xFF) / 255f
+                                    } else if (v0.color != 0xFFFFFFFFL && v0.color != 0L) {
+                                        val c = v0.color
+                                        r = ((c ushr 16) and 0xFF) / 255f
+                                        g = ((c ushr 8) and 0xFF) / 255f
+                                        b = (c and 0xFF) / 255f
+                                    }
+
+                                    // Directional Lambertian Shading
                                     val normal = v0.normal
                                     val lightIntensity = (abs(normal.dot(lightDir)) * 0.65f + 0.35f).coerceIn(0.25f, 1.0f)
-                                    val shadeColor = baseColor.copy(
-                                        red = (baseColor.red * lightIntensity).coerceIn(0f, 1f),
-                                        green = (baseColor.green * lightIntensity).coerceIn(0f, 1f),
-                                        blue = (baseColor.blue * lightIntensity).coerceIn(0f, 1f),
+                                    val shadeColor = Color(
+                                        red = (r * lightIntensity).coerceIn(0f, 1f),
+                                        green = (g * lightIntensity).coerceIn(0f, 1f),
+                                        blue = (b * lightIntensity).coerceIn(0f, 1f),
                                         alpha = 1.0f
                                     )
 
@@ -728,6 +809,14 @@ fun GlbImportPreviewDialog(
                                             shape = RoundedCornerShape(4.dp)
                                         ) {
                                             Text("Atas", fontSize = 9.sp, color = Color.White)
+                                        }
+                                        OutlinedButton(
+                                            onClick = { setSideView() },
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(24.dp),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text("Samping", fontSize = 9.sp, color = Color.White)
                                         }
                                         OutlinedButton(
                                             onClick = { setIsometricView() },

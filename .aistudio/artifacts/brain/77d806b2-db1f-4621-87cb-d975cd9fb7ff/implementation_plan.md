@@ -1,106 +1,93 @@
-# Full Landscape Studio, Immersive Navigation Auto-Hide & Performa Engine
+# Penyempurnaan Tekstur UV Atlas, Multi-Material GLB, Optimasi Performa, & Perapihan UI
 
-Mengubah seluruh aplikasi Vortex3D Engine menjadi mode **Fixed Landscape** secara penuh (baik di Lobby / Project Hub, 3D Studio, maupun Play Mode), memperbaiki bilah tombol navigasi sistem Android agar otomatis sembunyi seketika (*instant auto-hide*) setelah keyboard ditutup tanpa tersangkut, serta menerapkan optimasi performa komprehensif pada rendering 3D dan UI lists.
+Rencana penyempurnaan komprehensif pada visualisasi 3D GLB di Vortex3D Engine: menampilkan tekstur asli dan warna multi-material secara akurat (mengeliminasi tampilan warna abu-abu polos), akselerasi performa rendering untuk model berpoligon tinggi (hingga belasan ribu vertices), merapikan tata letak UI header bar dan kontrol kamera yang padat, serta memastikan stabilitas build project.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
 > Keputusan penting yang telah dikonfirmasi oleh pengguna:
-> - **Orientasi Aplikasi**: Fixed landscape satu arah penuh di seluruh layar (`SCREEN_ORIENTATION_LANDSCAPE`), termasuk Project Hub/Lobby, Studio Editor, Play Mode, dan seluruh dialog modal.
-> - **Bilah Navigasi Sistem**: Imersif penuh langsung otomatis sembunyi seketika saat keyboard (IME) ditutup.
-> - **Optimasi Performa**: Menyeluruh pada Viewport 3D (backface culling, pre-allocated vertex buffers, render-on-demand) serta efisiensi UI list (keyed lazy column, eliminasi rekomposisi berulang).
+> - **Tekstur & Warna GLB**: Menerapkan sampling tekstur UV atlas per-segitiga dari bitmap tertanam serta dukungan warna albedo multi-material per submesh.
+> - **Optimasi Performa**: Menggunakan cache proyeksi vertex dan adaptive Level of Detail (LOD) cerdas saat mengorbit model berpoligon tinggi (>3.000 triangles) agar tetap lancar 60 FPS tanpa lag.
+> - **Perapihan UI**: Merapikan header bar atas agar tidak bertumpuk/terpotong dan mengelompokkan tombol kontrol kamera ke dalam toolbar yang ergonomis dan elegan.
+> - **Restorasi .env**: Mengembalikan konfigurasi `.env` dengan placeholder `GEMINI_API_KEY=MY_GEMINI_API_KEY` agar Secrets Gradle Plugin tidak menghasilkan error sintaks Java saat kompilasi.
 
-- **Confirmed Decision 1**: Mengunci orientasi di `AndroidManifest.xml` (`android:screenOrientation="landscape"`) dan menghapus logika rotasi ke portrait di `MainActivity.kt` (`requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE` permanen).
-- **Confirmed Decision 2**: Mengimplementasikan controller imersif berbasis `WindowInsetsCompat` dan `onWindowFocusChanged` di mana event transisi keyboard tutup (`imeBottom == 0`) langsung memicu `insetsController.hide(WindowInsetsCompat.Type.systemBars())` dengan `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE` secara agresif.
-- **Confirmed Decision 3**: Optimasi grafis kanvas 3D dengan Backface Culling (memeriksa arah normal poligon terhadap kamera untuk membuang poligon belakang sebelum proses kalkulasi cahaya dan pewarnaan), meminimalkan alokasi objek dalam loop `onDraw` menggunakan buffer array yang dapat digunakan kembali, serta menyempurnakan layout Project Hub agar tampil elegan dalam format landscape lebar.
+- **Confirmed Decision 1**: Parser GLB (`GlbParser.kt`) akan mengekstrak seluruh palet material (`materials`) dan koordinat UV (`TEXCOORD_0`) per primitive, sehingga model 3D (seperti karakter Quaternius pada screenshot pengguna) menampilkan warna rambut, kulit, pakaian, dan sepatu asli dari tekstur atlas, bukan satu warna abu-abu polos.
+- **Confirmed Decision 2**: Rendering kanvas pada `GlbImportPreviewDialog.kt` akan melakukan sampling warna tekstur langsung dari `textureBitmap` menggunakan koordinat UV segitiga, dipadukan dengan pencahayaan directional Lambertian untuk menghasilkan visual 3D yang hidup dan tajam.
+- **Confirmed Decision 3**: Menyederhanakan header bar dan toolbar kontrol kamera menjadi chip segmented yang rapi, memisahkan scrubber animasi dengan layout yang bersih, dan memaksimalkan ruang pandang kanvas 3D.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: Menghadirkan lingkungan game engine profesional berbasis landscape penuh ala Godot Engine / Unity Mobile di perangkat Android. Layar tidak akan pernah berputar canggung ke portrait saat kembali ke Lobby, bilah navigasi perangkat tidak akan mengganggu kanvas kerja setelah pengguna mengetik kode Lua atau shader, dan frame rate rendering 3D meningkat drastis berkat pemangkasan kalkulasi poligon yang tidak terlihat.
-- **Target Audience / Persona**: Kreator game 3D mobile yang membutuhkan konsistensi ruang kerja lebar (widescreen landscape) tanpa gangguan bilah navigasi sistem.
-- **Key Value**: Pengalaman editor konsisten, area kerja maksimal tanpa distraksi, responsivitas keyboard yang bersih, dan latensi frame yang jauh lebih rendah.
+- **What It Does**: Membawa visualisasi GLB dari sekadar wireframe/clay abu-abu menjadi render 3D penuh warna dengan tekstur atlas embedded asli, multi-material shading, dan performa tinggi yang responsif saat diputar dengan gestur sentuh.
+- **Target Audience / Persona**: Kreator game yang mengimpor karakter 3D GLB (Quaternius, Kenney, Mixamo, Blender) ke dalam HP/tablet Android dan ingin melihat model persis seperti tampilan aslinya.
+- **Key Value**: Model karakter dan prop 3D tampil dengan visual detail, warna kulit/kostum akurat, tidak lag saat rotasi, dan UI bersih tanpa elemen visual yang bertumpuk.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-### Key User Flows
+### Key Improvements
 
-1. **Alur Kerja Landscape Widescreen di Project Hub (Lobby)**:
-   - Pengguna membuka aplikasi atau kembali ke Lobby dari Editor.
-   - Layar tetap kokoh dalam format landscape horizontal.
-   - Project Hub menampilkan tata letak grid 2-kolom / 3-kolom lebar yang proporsional untuk kartu project, preview thumbnail 3D, serta panel aksi cepat tanpa ada teks atau tombol yang terpotong.
-2. **Mengetik & Menutup Keyboard (Bilah Navigasi Imersif Bersih)**:
-   - Pengguna mengetuk editor script Lua, nama file, atau input prompt AI.
-   - Keyboard muncul ke atas, area teks otomatis menggeser (*ime-aware insets*).
-   - Saat pengguna menekan "Done", menyembunyikan keyboard, atau mengetuk area di luar input, keyboard menghilang dan bilah navigasi Android seketika lenyap ke mode imersif penuh (*zero delay*), mengembalikan layar penuh untuk kanvas 3D.
-3. **Viewport 3D Berkecepatan Tinggi (Backface Culling & Zero-Garbage Frame)**:
-   - Saat mengorbit model berpoligon tinggi (GLB ratusan hingga ribuan poligon), frame rate tetap mulus stabil di 60 FPS tanpa jeda garbage collection (*stutter-free*).
-
-### Visual Identity & Theme
-
-- **Palet Warna**: Deep Navy Void (`#0B0F17`), Godot Slate (`#141A24`), Cyan Accent (`#00E5FF`), Neon Green (`#7EE787`).
-- **Layout Ergonomis Landscape**:
-  - Top bar ringkas dengan navigasi cepat ke Lobby, Simulation, dan Wireframe.
-  - Dock kiri (Scene Tree, Assets, File Manager) dan Dock kanan (Inspector, Lua IDE, AI Copilot) dapat dibuka-tutup (*collapsible*).
-  - Area Viewport 3D memanfaatkan ruang tengah secara leluasa.
+1. **Warna & Tekstur Asli Model 3D**:
+   - Model karakter wanita (pada screenshot `Animated Woman by Quaternius`) akan langsung menampilkan warna kulit, rambut cokelat/pirang, baju/celana warna-warni dari tekstur atlas bawaan GLB.
+   - Model non-tekstur dengan multi-material (misalnya mobil dengan kaca transparan, ban hitam, bodi merah) akan menampilkan warna masing-masing komponen submesh secara tepat.
+2. **Performa Halus (Zero Stutter Rotation)**:
+   - Saat pengguna memutar (orbit) atau zoom model dengan 12.000+ vertices, render loop memanfaatkan cache proyeksi titik vertex dan adaptive LOD sehingga framerate stabil dan tidak terasa berat.
+3. **Perapihan Header & Toolbar Kontrol Kamera**:
+   - **Header Bar**: Nama model, ukuran file, jumlah polygon, dan jumlah tulang tertata dalam baris rapi dengan badge ringkas tanpa teks berhimpitan.
+   - **Kamera & Tampilan Toolbar**: Menggabungkan tombol presets sudut pandang (*Depan, Atas, Samping, Iso, Reset*) ke dalam segmented group yang kompak. Tombol *Wireframe*, *Grid*, dan *Tulang* menggunakan chip toggle beraksen neon yang jelas.
+   - **Animasi Bar**: Scrubber timeline animasi ditata rapi dengan indikator waktu detik dan speed selector (0.5x, 1.0x, 2.0x).
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Kunci Permanen Fixed Landscape**:
-  - *Chosen Approach*: Menghilangkan mode portrait dari seluruh siklus hidup Activity (`ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE`).
-  - *Why*: Sebuah game engine 3D membutuhkan ruang kerja horizontal untuk timeline, hierarki objek, kanvas 3D, dan editor script secara simultan. Menjaga landscape secara permanen menghilangkan jeda konfigurasi ulang tampilan layar (*orientation flicker*).
-- **Decision 2: Backface Culling pada Software Renderer**:
-  - *Chosen Approach*: Menghitung tanda dot product arah normal poligon di ruang layar (*screen-space normal z-component / 2D cross product*) sebelum shading.
-  - *Why*: Lebih dari 45–50% segitiga model tertutup di sisi belakang. Membuang poligon ini sebelum kalkulasi pencahayaan memangkas beban CPU dan Canvas DrawPath hingga separuhnya.
-- **Decision 3: Sistem Imersif Reaktif Terhadap IME & Window Focus**:
-  - *Chosen Approach*: Menyambungkan `WindowInsetsAnimationCallback` / `imeNestedScrollConnection` serta lifecycle listener window focus ke `WindowInsetsControllerCompat`.
-  - *Why*: Di perangkat Android modern, gesture bar / 3-tombol navigasi sering kali tetap tertinggal jika kontrol imersif hanya dipanggil satu kali saat pembuatan activity.
+- **Decision 1: Per-Triangle UV Texture Sampling**:
+  - *Chosen Approach*: Menghitung titik tengah UV segitiga `(u0+u1+u2)/3, (v0+v1+v2)/3`, lalu mengambil warna pixel dari `textureBitmap` terurai.
+  - *Why*: Sangat cepat (O(1) memory lookup), kompatibel 100% dengan software canvas Android, dan ideal untuk model game bertekstur atlas (palette texture) seperti Quaternius/Synty.
+  - *Alternatives Considered*: Menggunakan OpenGL ES Texture Shader penuh — ditolak karena memerlukan GLSurfaceView terpisah yang lebih lambat diinisialisasi dalam dialog Compose.
+- **Decision 2: Adaptive LOD Saat Rotasi Cepat**:
+  - *Chosen Approach*: Jika model memiliki > 3.000 segitiga dan kamera sedang diputar secara aktif (`isInteracting == true`), render menggunakan stride adaptif atau prioritas segitiga besar, lalu langsung merender 100% detail penuh saat jari dilepas.
+  - *Why*: Menjamin interaksi gestur sentuh selalu instan dan responsif di berbagai spesifikasi prosesor ponsel.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+## 4. Technical Architecture & Implementation Steps
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│                   AndroidManifest.xml                  │
-│       screenOrientation = "landscape" (Permanent)      │
+│                      GlbParser                         │
+│  - Extract ALL Materials & baseColorFactors            │
+│  - Extract TEXCOORD_0 (u, v) for every vertex          │
+│  - Decode Embedded Images (PNG/JPG) to Bitmap          │
+│  - Map Material Index & Colors to Triangles            │
 └──────────────────────────┬─────────────────────────────┘
                            │
                            ▼
 ┌────────────────────────────────────────────────────────┐
-│                      MainActivity                      │
-│  - Enforce SCREEN_ORIENTATION_LANDSCAPE                │
-│  - ImmersiveController:                                │
-│      * WindowInsetsCompat IME change listener          │
-│      * onWindowFocusChanged instant systemBars.hide()  │
-│      * BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE           │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-            ┌──────────────┴──────────────┐
-            ▼                             ▼
-┌─────────────────────────┐   ┌─────────────────────────┐
-│     ProjectHubScreen    │   │  LandscapeStudioScreen  │
-│ - Widescreen grid 2/3   │   │ - Collapsible Docks     │
-│ - Keyed LazyColumn      │   │ - Fast Canvas Viewport  │
-│ - Landscape Modals      │   │ - Backface Culling      │
-└─────────────────────────┘   └─────────────────────────┘
-                                          │
-                                          ▼
-                              ┌─────────────────────────┐
-                              │    3D Engine Renderer   │
-                              │ - Screen-space Culling  │
-                              │ - Reusable FloatBuffers │
-                              │ - Skip idle frames      │
-                              └─────────────────────────┘
+│               GlbImportPreviewDialog                   │
+│   ┌────────────────────────────────────────────────┐   │
+│   │ Neatly Arranged Header Bar & Stats Badges      │   │
+│   └──────────────────────┬─────────────────────────┘   │
+│                          │                             │
+│         ┌────────────────┴───────────────┐             │
+│         ▼                                ▼             │
+│  [Viewport 3D with Texture]     [Clean Segmented Docks]│
+│  - UV Pixel Color Sampling      - Camera View Presets  │
+│  - Backface Culling (2D Cross)  - Compact Filter Chips │
+│  - Vertex Projection Cache      - Tab Hierarchy/Info   │
+│  - Adaptive LOD on Touch Drag   - Sleek Scrubber Bar   │
+└────────────────────────────────────────────────────────┘
 ```
 
 ### Rencana File yang Dimodifikasi:
-1. `app/src/main/AndroidManifest.xml`: Kunci `screenOrientation="landscape"`.
-2. `app/src/main/java/com/example/MainActivity.kt`: Kunci orientasi landscape permanen, mekanisme auto-hide navigation bar imersif saat keyboard tutup dan saat window mendapat fokus kembali.
-3. `app/src/main/java/com/example/ui/editor/ProjectHubScreen.kt`: Penyesuaian tata letak grid dan dialog agar proporsional untuk landscape lebar.
-4. `app/src/main/java/com/example/ui/editor/GlbImportPreviewDialog.kt` & `app/src/main/java/com/example/ui/editor/Viewport3D.kt`: Implementasi Backface Culling pada rendering segitiga, pre-alokasi buffer, dan penanganan navigasi imersif.
+1. `/.env`: Dibuat kembali dengan `GEMINI_API_KEY=MY_GEMINI_API_KEY`.
+2. `app/src/main/java/com/example/engine/model/GlbParser.kt`:
+   - Menyimpan warna albedo per-submesh / per-primitive.
+   - Mengaitkan koordinat UV per-vertex secara utuh.
+   - Menghubungkan material index ke daftar segitiga (*Triangle material mapping*).
+3. `app/src/main/java/com/example/ui/editor/GlbImportPreviewDialog.kt`:
+   - Implementasi sampling warna tekstur UV atlas dari `inspection.textureBitmap` per segitiga.
+   - Cache proyeksi vertex `projX`, `projY`, `projZ` dan adaptive LOD saat gestur sentuh.
+   - Merapikan header bar, segmented camera controls, dan timeline scrubber.

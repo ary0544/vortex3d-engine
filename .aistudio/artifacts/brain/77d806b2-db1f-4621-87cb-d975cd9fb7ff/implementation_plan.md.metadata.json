@@ -1,6 +1,6 @@
 {
-  "summary": "Rencana implementasi orientasi Fixed Landscape penuh di seluruh aplikasi (Lobby/Project Hub, Studio, Play Mode), perbaikan sistem auto-hide bilah navigasi imersif setelah keyboard ditutup, serta optimasi performa komprehensif pada kanvas 3D (backface culling, buffer reuse) dan UI lists.",
-  "updatedAt": "2026-10-14T04:34:52.769331974Z",
+  "summary": "Rencana penyempurnaan menyeluruh dialog GLB 3D: dukungan penuh tekstur UV atlas dan multi-material untuk semua jenis model GLB, optimasi performa poligon tinggi (vertex projection cache & adaptive LOD), perapihan UI header bar dan toolbar kamera, serta restorasi konfigurasi .env.",
+  "updatedAt": "2026-10-14T06:11:12.229298439Z",
   "requestFeedback": true,
   "userFacing": true
 }

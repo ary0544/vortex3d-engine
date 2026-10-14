@@ -16,7 +16,9 @@ data class Vertex(
 data class Triangle(
     val i0: Int,
     val i1: Int,
-    val i2: Int
+    val i2: Int,
+    val materialIndex: Int = 0,
+    val color: Long = 0L
 )
 
 enum class PrimitiveType {

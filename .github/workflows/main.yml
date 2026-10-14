@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Checkout Source Code
+      - name: 1. Checkout Source Code (Shallow Clone)
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 2. Setup Java JDK 17
@@ -26,7 +26,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 3. Setup Android SDK Paths & Tools
+      - name: 3. Setup Gradle with Official Cache & Daemon
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+          gradle-home-cache-cleanup: true
+
+      - name: 4. Setup Android SDK Paths & Tools
         run: |
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -V | tail -n 1)
@@ -107,7 +113,10 @@ jobs:
 
           opt_flags = [
               "android.useAndroidX=true",
-              "org.gradle.jvmargs=-Xmx2048m -XX:+UseG1GC -Dfile.encoding=UTF-8"
+              "org.gradle.jvmargs=-Xmx3072m -XX:+UseG1GC -XX:+ParallelRefProcEnabled -Dfile.encoding=UTF-8",
+              "org.gradle.parallel=true",
+              "org.gradle.caching=true",
+              "org.gradle.configuration-cache=true"
           ]
           for flag in opt_flags:
               key = flag.split("=")[0]
@@ -176,7 +185,8 @@ jobs:
       - name: 7. Compile Release APK (Strictly ARM64 64-bit)
         run: |
           $GRADLE_BIN assembleRelease \
-            --no-daemon \
+            --build-cache \
+            --parallel \
             --stacktrace
 
       - name: 8. Page-Alignment, Signature (V1+V2+V3) & Strict 64-bit Validation
