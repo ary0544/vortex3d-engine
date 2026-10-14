@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -83,7 +84,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -383,27 +386,30 @@ fun GlbImportPreviewDialog(
                                     awaitFirstDown(requireUnconsumed = false)
                                     var prevDistance = 0f
                                     var prevCenter = Offset.Zero
+                                    var prevSinglePos: Offset? = null
 
                                     do {
                                         val event = awaitPointerEvent()
                                         val activePointers = event.changes.filter { it.pressed }
 
-                                        // HANYA merespons jika 2 jari (atau lebih) aktif!
                                         if (activePointers.size >= 2) {
+                                            // Reset single pointer state saat multi-finger aktif
+                                            prevSinglePos = null
+
                                             val p1 = activePointers[0].position
                                             val p2 = activePointers[1].position
                                             val currentDist = hypot(p1.x - p2.x, p1.y - p2.y)
                                             val currentCenter = Offset((p1.x + p2.x) / 2f, (p1.y + p2.y) / 2f)
 
                                             if (prevDistance > 0f) {
-                                                // Pinch zoom (perbesar / perkecil)
+                                                // 1. Pinch zoom (perbesar / perkecil jarak kamera)
                                                 val zoom = currentDist / prevDistance
                                                 if (zoom > 0.01f && zoom < 100f) {
                                                     distanceState = (distanceState / zoom).coerceIn(1.0f, 35.0f)
                                                     previewCamera.distance = distanceState
                                                 }
 
-                                                // Geser 2-jari (Pan atau Orbit)
+                                                // 2. Geser 2-jari (Pan geser posisi kamera atau Orbit sesuai preferensi)
                                                 val panDelta = currentCenter - prevCenter
                                                 if (panDelta != Offset.Zero) {
                                                     val signX = if (invertX) -1f else 1f
@@ -425,7 +431,30 @@ fun GlbImportPreviewDialog(
                                             prevDistance = currentDist
                                             prevCenter = currentCenter
                                             activePointers.forEach { it.consume() }
+                                        } else if (activePointers.size == 1) {
+                                            // Reset 2-finger state saat hanya 1 pointer aktif
+                                            prevDistance = 0f
+                                            prevCenter = Offset.Zero
+
+                                            // 1-JARI: KONTROL ORBIT ROTASI KAMERA (YAW & PITCH)
+                                            val curPos = activePointers[0].position
+                                            if (prevSinglePos != null) {
+                                                val delta = curPos - prevSinglePos
+                                                if (delta != Offset.Zero) {
+                                                    val signX = if (invertX) -1f else 1f
+                                                    val signY = if (invertY) -1f else 1f
+                                                    val factor = 0.45f
+                                                    yawState = (yawState + delta.x * factor * signX) % 360f
+                                                    pitchState = (pitchState - delta.y * factor * signY).coerceIn(-85f, 85f)
+                                                    previewCamera.yawDegrees = yawState
+                                                    previewCamera.pitchDegrees = pitchState
+                                                    cameraRevision++
+                                                }
+                                            }
+                                            prevSinglePos = curPos
+                                            activePointers[0].consume()
                                         } else {
+                                            prevSinglePos = null
                                             prevDistance = 0f
                                             prevCenter = Offset.Zero
                                         }
@@ -486,7 +515,7 @@ fun GlbImportPreviewDialog(
                                 }
                             }
 
-                            // 2. Render Mesh Model GLB
+                            // 2. Render Mesh Model GLB Solid Penuh
                             val mesh = inspection.mesh
                             val baseColor = Color(inspection.material.albedoColor)
                             val lightDir = Vec3(0.5f, 0.9f, 0.6f).normalized()
@@ -507,12 +536,11 @@ fun GlbImportPreviewDialog(
                             }
 
                             val triCount = mesh.triangles.size
-                            val triStep = if (triCount > 1500) maxOf(1, triCount / 1200) else 1
 
                             if (isWireframe) {
                                 val wfColor = Color(0xFF00E5FF).copy(alpha = 0.8f)
                                 val wfPath = Path()
-                                for (ti in 0 until triCount step triStep) {
+                                for (ti in 0 until triCount) {
                                     val tri = mesh.triangles[ti]
                                     val z0 = projZ[tri.i0]
                                     val z1 = projZ[tri.i1]
@@ -526,8 +554,18 @@ fun GlbImportPreviewDialog(
                                 }
                                 drawPath(wfPath, color = wfColor, style = Stroke(width = 1f))
                             } else {
+                                // Depth-Sorted Solid Shading (Painter's Algorithm)
+                                // Sortir segitiga dari Z terjauh ke Z terdekat agar permukaan solid sempurna
+                                val sortedIndices = Array(triCount) { it }
+                                val avgZ = FloatArray(triCount)
+                                for (ti in 0 until triCount) {
+                                    val tri = mesh.triangles[ti]
+                                    avgZ[ti] = (projZ[tri.i0] + projZ[tri.i1] + projZ[tri.i2]) / 3f
+                                }
+                                sortedIndices.sortByDescending { avgZ[it] }
+
                                 val triPath = Path()
-                                for (ti in 0 until triCount step triStep) {
+                                for (ti in sortedIndices) {
                                     val tri = mesh.triangles[ti]
                                     val z0 = projZ[tri.i0]
                                     val z1 = projZ[tri.i1]
@@ -697,7 +735,7 @@ fun GlbImportPreviewDialog(
                                     }
                                 }
 
-                                // Row 2: Mode Gestur 2-Jari & Invert
+                                // Row 2: Panduan Kontrol Sentuh & Invert
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -707,28 +745,9 @@ fun GlbImportPreviewDialog(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text("Gestur 2-Jari:", fontSize = 9.sp, color = Color(0xFF8B949E))
-                                        FilterChip(
-                                            selected = twoFingerMode == "pan",
-                                            onClick = { twoFingerMode = "pan" },
-                                            label = { Text("Geser (Pan)", fontSize = 9.sp) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = Color(0xFF1F6FEB),
-                                                selectedLabelColor = Color.White
-                                            ),
-                                            modifier = Modifier.height(22.dp)
-                                        )
-                                        FilterChip(
-                                            selected = twoFingerMode == "orbit",
-                                            onClick = { twoFingerMode = "orbit" },
-                                            label = { Text("Putar (Orbit)", fontSize = 9.sp) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = Color(0xFF1F6FEB),
-                                                selectedLabelColor = Color.White
-                                            ),
-                                            modifier = Modifier.height(22.dp)
-                                        )
-                                        Text("• Cubit (Pinch) = Zoom", fontSize = 8.5.sp, color = Color(0xFF00E5FF))
+                                        Text("1-Jari: Orbit", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
+                                        Text("•", fontSize = 9.sp, color = Color(0xFF8B949E))
+                                        Text("2-Jari: Pan & Zoom", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF388BFD))
                                     }
 
                                     Row(
@@ -1175,6 +1194,42 @@ private fun ModelFullInfoTab(
                 InfoItemRow("Metallic", "${inspection.rawMetadata.metallic}")
                 InfoItemRow("Jumlah Material", "${inspection.rawMetadata.materialCount}")
                 InfoItemRow("Jumlah Tekstur", "${inspection.rawMetadata.textureCount}")
+
+                if (inspection.textureBitmap != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text("Tekstur Gambar Asli GLB:", fontSize = 10.sp, color = Color(0xFF00E5FF), fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(3.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF0D1117))
+                            .border(1.dp, Color(0xFF30363D), RoundedCornerShape(4.dp))
+                            .padding(4.dp)
+                    ) {
+                        Image(
+                            bitmap = inspection.textureBitmap.asImageBitmap(),
+                            contentDescription = "Tekstur Asli GLB",
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), RoundedCornerShape(3.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "${inspection.textureBitmap.width} × ${inspection.textureBitmap.height} px",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Text("Format: Embedded GLB (PNG/JPEG)", fontSize = 9.sp, color = Color(0xFF8B949E))
+                            Text("Warna albedo model diekstrak dari tekstur ini", fontSize = 8.5.sp, color = Color(0xFF00E5FF))
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(6.dp))

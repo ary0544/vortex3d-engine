@@ -1,6 +1,6 @@
 {
-  "summary": "Rencana perombakan komprehensif UI GLB Import Preview Dialog: tampilan fullscreen edge-to-edge tanpa celah sisi hitam, perluasan area preview 3D dengan auto-fit kamera agar model memenuhi frame, serta penyeragaman ukuran tombol kontrol animasi dan pembersihan tombol ganda di footer.",
-  "updatedAt": "2026-10-14T02:08:02.340996629Z",
+  "summary": "Rencana implementasi dukungan kontrol 1-jari (Orbit Kamera), 2-jari (Pan & Pinch-to-Zoom), ekstraksi tekstur gambar asli GLB (PNG/JPEG embedded), serta rendering solid mesh penuh dengan depth-sorting untuk menghilangkan efek titik/noise pada Viewport 3D GLB.",
+  "updatedAt": "2026-10-14T03:35:03.826448489Z",
   "requestFeedback": true,
   "userFacing": true
 }

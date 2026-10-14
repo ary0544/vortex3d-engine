@@ -1,5 +1,7 @@
 package com.example.engine.model
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import com.example.engine.math.Vec3
 import org.json.JSONObject
 import java.io.File
@@ -80,7 +82,8 @@ data class GlbInspectionResult(
     val boneCount: Int,
     val animations: List<GlbAnimationInfo>,
     val rawMetadata: GlbMetadata,
-    val file: File? = null
+    val file: File? = null,
+    val textureBitmap: Bitmap? = null
 ) {
     fun formatFullInfoString(): String {
         return buildString {
@@ -243,6 +246,36 @@ object GlbParser {
         val skins = root.optJSONArray("skins")
         val animations = root.optJSONArray("animations")
         val materials = root.optJSONArray("materials")
+        val images = root.optJSONArray("images")
+
+        // Ekstraksi Tekstur Gambar Tertanam (PNG / JPEG)
+        var textureBitmap: Bitmap? = null
+        if (images != null && images.length() > 0 && bufferViews != null && binBuffer != null) {
+            try {
+                for (imgIdx in 0 until images.length()) {
+                    val imgObj = images.getJSONObject(imgIdx)
+                    val bvIdx = imgObj.optInt("bufferView", -1)
+                    if (bvIdx in 0 until bufferViews.length()) {
+                        val bv = bufferViews.getJSONObject(bvIdx)
+                        val bvOffset = bv.optInt("byteOffset", 0)
+                        val byteLength = bv.optInt("byteLength", 0)
+                        if (byteLength > 0 && bvOffset + byteLength <= binBuffer.capacity()) {
+                            val imgBytes = ByteArray(byteLength)
+                            val savedPos = binBuffer.position()
+                            binBuffer.position(bvOffset)
+                            binBuffer.get(imgBytes)
+                            binBuffer.position(savedPos)
+
+                            val bmp = BitmapFactory.decodeByteArray(imgBytes, 0, byteLength)
+                            if (bmp != null) {
+                                textureBitmap = bmp
+                                break
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
 
         val modelName = meshes?.optJSONObject(0)?.optString("name")
             ?: fileName.substringBeforeLast(".")
@@ -270,6 +303,35 @@ object GlbParser {
                     albedoColor = ((0xFFL shl 24) or (r.toLong() shl 16) or (g.toLong() shl 8) or b.toLong())
                     baseColorHex = String.format("#%02X%02X%02X", r, g, b)
                 }
+            }
+        }
+
+        // Jika tekstur bitmap ditemukan, ambil warna rata-rata/dominan agar shading solid memiliki warna asli
+        if (textureBitmap != null) {
+            var rSum = 0L
+            var gSum = 0L
+            var bSum = 0L
+            var sampleCount = 0
+            val stepX = max(1, textureBitmap.width / 12)
+            val stepY = max(1, textureBitmap.height / 12)
+            for (y in 0 until textureBitmap.height step stepY) {
+                for (x in 0 until textureBitmap.width step stepX) {
+                    val px = textureBitmap.getPixel(x, y)
+                    val alpha = (px ushr 24) and 0xFF
+                    if (alpha > 40) {
+                        rSum += (px ushr 16) and 0xFF
+                        gSum += (px ushr 8) and 0xFF
+                        bSum += px and 0xFF
+                        sampleCount++
+                    }
+                }
+            }
+            if (sampleCount > 0) {
+                val r = (rSum / sampleCount).toInt()
+                val g = (gSum / sampleCount).toInt()
+                val b = (bSum / sampleCount).toInt()
+                albedoColor = ((0xFFL shl 24) or (r.toLong() shl 16) or (g.toLong() shl 8) or b.toLong())
+                baseColorHex = String.format("#%02X%02X%02X", r, g, b)
             }
         }
 
@@ -579,7 +641,8 @@ object GlbParser {
             boneCount = totalBoneCount,
             animations = animationInfos,
             rawMetadata = metadata,
-            file = sourceFile
+            file = sourceFile,
+            textureBitmap = textureBitmap
         )
     }
 
