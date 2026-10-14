@@ -1,6 +1,6 @@
 {
-  "summary": "Rencana implementasi gestur multi-touch (1 jari orbit turntable, 2 jari pan & pinch zoom), pengaturan inversi sumbu (Invert X & Invert Y), slider sensitivitas, serta tombol reset kamera cepat pada Viewport 3D Vortex3D.",
-  "updatedAt": "2026-10-13T06:38:45.024986831Z",
+  "summary": "Rencana perombakan komprehensif UI GLB Import Preview Dialog: tampilan fullscreen edge-to-edge tanpa celah sisi hitam, perluasan area preview 3D dengan auto-fit kamera agar model memenuhi frame, serta penyeragaman ukuran tombol kontrol animasi dan pembersihan tombol ganda di footer.",
+  "updatedAt": "2026-10-14T02:08:02.340996629Z",
   "requestFeedback": true,
   "userFacing": true
 }

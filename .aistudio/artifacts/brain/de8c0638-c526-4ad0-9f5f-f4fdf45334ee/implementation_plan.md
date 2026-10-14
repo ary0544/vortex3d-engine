@@ -1,95 +1,88 @@
-# Kontrol Multi-Touch Viewport 3D & Kustomisasi Kamera
+# Perbaikan Desain UI & Ergonomi Dialog GLB 3D Importer
 
-Rencana peningkatan interaksi Viewport 3D pada Vortex3D untuk mendukung pemisahan gestur 1-jari (Orbit Turntable) dan 2-jari (Pinch-to-Zoom & Two-Finger Pan), dilengkapi opsi penyesuaian arah geser (Invert X & Invert Y), slider sensitivitas, dan tombol reset view instan.
+Rencana restrukturisasi dan polesan visual menyeluruh pada antarmuka dialog pratinjau GLB (`GlbImportPreviewDialog`) untuk memberikan pengalaman yang lega, modern, dan nyaman di perangkat mobile/landscape.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Berdasarkan preferensi yang telah Anda konfirmasi:
-> - **Pemisahan Gestur**: 1 jari didedikasikan untuk Orbit kamera mengelilingi target 3D; 2 jari secara bersamaan menangani Pinch-to-Zoom (perbesar/perkecil) dan Panning (menggeser titik fokus kamera).
-> - **Inversi Sumbu Terbalik**: Disediakan toggle interaktif `Invert X` dan `Invert Y` langsung di viewport (dan status tersimpan) agar arah geser dapat dibalik sesuai preferensi intuisi Anda.
-> - **Sensitivitas & Reset**: Ditambahkan menu overlay ringan di sudut viewport berisi slider sensitivitas rotasi/pan serta tombol "Reset View" (mengembalikan sudut dan posisi kamera ke preset standar).
+> Keputusan desain yang telah dikonfirmasi:
+> - **Batas Dialog**: Fullscreen edge-to-edge penuh (`usePlatformDefaultWidth = false`, tanpa margin/celah hitam di sekeliling jendela).
+> - **Area Pratinjau 3D**: Memperlebar porsi kolom preview (rasio split lebih lapang ~65:35), menyesuaikan skala auto-fit dan jarak kamera awal agar model 3D langsung memenuhi frame secara proporsional.
+> - **Kerapian & Konsistensi Tombol**: Menyeragamkan tinggi dan padding semua tombol kontrol (playback animasi & footer), menghilangkan tombol duplikat ("Salin Info Lengkap"), dan menata tata letak kontrol agar simetris dan rapi.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **Apa yang Dibangun**: Sistem input gestur multi-touch khusus pada Viewport 3D yang memisahkan jumlah pointer sentuhan secara presisi:
-  - **1 Jari**: Melakukan orbit rotasi kamera (`yaw` dan `pitch`) terhadap target objek.
-  - **2 Jari**: Melakukan transformasi gabungan pinch-to-zoom (mengubah jarak kamera) dan two-finger pan (menggeser titik target kamera pada bidang sejajar pandangan layar).
-  - **Menu Quick Camera Settings**: Popover ringkas di toolbar viewport untuk mengubah Invert X, Invert Y, sensitivitas geser, dan tombol Reset Camera.
-- **Target Pengguna**: Pembuat game dan desainer 3D mobile yang membutuhkan navigasi scene yang presisi, luwes, dan ergonomis tanpa rasa canggung atau arah putar terbalik.
-- **Nilai Tambah**: Menghilangkan konflik antara zoom, pan, dan orbit yang sebelumnya tercampur di satu handler, serta memberikan kontrol penuh atas orientasi rotasi.
+- **Apa yang Diperbaiki**:
+  1. **Eliminasi Celah Dialog**: Menghilangkan padding 6.dp luar dan border tebal yang menyisakan celah hitam di layar; dialog kini membuka secara penuh (edge-to-edge).
+  2. **Viewport 3D Lebih Lega & Model Terbingkai Sempurna**:
+     - Mengubah bobot kolom kiri dari `1.35f` menjadi `1.85f` (rasio preview lebih dominan dan imersif).
+     - Menyetel kalkulasi auto-fit kamera (`fitScale` dan `distanceState`) sehingga model GLB dengan skala apa pun langsung tampil besar dan pas di tengah viewport.
+     - Menyediakan tombol cepat *Maximize Preview* (toggle menyembunyikan panel samping saat ingin fokus menginspeksi model 3D).
+  3. **Penyeragaman Elemen Tombol**:
+     - Memadatkan bilah pemutar animasi dengan tinggi komponen seragam (32.dp), slider yang seimbang, dan badge durasi yang jelas.
+     - Menyederhanakan footer aksi dengan menghapus tombol salin ganda dan hanya menampilkan tombol esensial: `Batal`, `Simpan ke Assets`, dan `Spawn ke Scene 3D ★`.
+- **Target Pengguna**: Developer game mobile yang membutuhkan proses impor dan inspeksi aset 3D yang cepat, jelas, dan tanpa distraksi UI yang sempit atau bertumpuk.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-### Alur Interaksi Pengguna (User Flow)
-1. **Navigasi 1 Jari (Orbit)**:
-   - Pengguna menyentuh kanvas 3D dengan 1 jari dan menggesernya.
-   - Kamera berputar mengelilingi objek fokus secara mulus.
-   - Jika arah terasa terbalik, pengguna membuka ikon gear/kamera di sudut viewport lalu mengaktifkan toggle `Invert X` atau `Invert Y`.
-2. **Navigasi 2 Jari (Zoom & Pan)**:
-   - Pengguna menempelkan 2 jari di layar:
-     - Mencubit (pinch in/out) memperbesar atau memperkecil jarak kamera secara langsung dan mulus.
-     - Menggeser kedua jari bersamaan menggeser (pan) target kamera horizontal dan vertikal di ruang 3D.
-3. **Reset & Presets Cepat**:
-   - Jika kamera tersesat atau terlalu jauh, pengguna cukup menekan tombol `Reset View` untuk kembali ke posisi awal (sudut isometrik 45°, pitch 30°, jarak 8 unit).
-
-### Identitas Visual & Komponen UI
-- **Viewport Floating HUD**:
-  - Tombol ikon `ControlCamera` / `Tune` di samping kontrol play/pause saat ini dengan gaya semi-transparan Material 3 Surface (`tonalElevation = 3.dp`).
-  - Dropdown/Popover Floating Card bernuansa dark editor (`Color(0xFF1E2129)`), border halus (`Color(0xFF2C3240)`), dan aksen Cyan/Primary.
-  - Switch interaktif untuk `Invert Orbit X` dan `Invert Orbit Y`.
-  - Slider responsif untuk `Orbit Sensitivity` dan `Pan/Zoom Sensitivity`.
-  - Action chips untuk `Reset View`, `Front View`, `Top View`.
+### Alur & Perubahan Tampilan
+1. **Header Dialog**:
+   - Tampil menyatu di bagian paling atas dengan latar *Dark Slate* (`#0E131C`) dan garis pemisah tipis.
+   - Di sisi kanan: Tombol ikon `Salin Info` (kompak dengan tooltip/label ringkas) dan tombol `Close (X)`.
+2. **Viewport 3D (Sisi Kiri)**:
+   - Area kanvas 3D memanjang dan mengisi sebagian besar layar.
+   - Model 3D terpusat dan berukuran optimal tanpa perlu zoom manual berulang kali.
+   - Chip filter di sudut atas (Wireframe, Grid, Tulang, Reset) ditata dengan tinggi kompak (26.dp).
+3. **Bilah Pemutar Animasi (Animation Bar)**:
+   - Ditata dalam kontainer ramping 42.dp (sebelumnya 56.dp yang memakan tinggi kanvas).
+   - Tombol Play/Pause (ukuran 32.dp), dropdown pemilih klip animasi (tinggi 32.dp), timeline scrubber slider terintegrasi dengan penunjuk waktu (0.00s / 1.33s), dan toggle kecepatan (0.5x, 1x, 2x) dengan tinggi 32.dp yang presisi.
+4. **Panel Informasi & Tab (Sisi Kanan)**:
+   - Tab navigasi (*Info Lengkap*, *Pengaturan*, *Hierarki*, *Animasi*) dengan tinggi 34.dp.
+   - Konten tabel dan kartu parameter tertata rapi tanpa teks bertabrakan.
+5. **Footer Bar**:
+   - Sisi kiri: Tombol `Batal` (Outlined, 36.dp).
+   - Sisi kanan: Tombol `Simpan ke Assets Saja` (Outlined, 36.dp) dan tombol utama `Spawn ke Scene 3D ★` (Filled Cyan, 36.dp, aksen menonjol).
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Deteksi Gestur: Pointer Input Kustom vs `detectTransformGestures` Bawaan**:
-  - *Pendekatan Terpilih*: Menggunakan `pointerInput` dengan pembacaan multi-pointer (`awaitPointerEventScope`) yang secara eksplisit menghitung jumlah sentuhan aktif (`pointers.size`).
-  - *Alasan*: `detectTransformGestures` bawaan Compose mencampuradukkan 1 jari dan 2 jari ke dalam callback `pan` yang sama, sehingga 1 jari dan 2 jari tidak bisa dibedakan. Dengan loop pointer event kustom, gestur 1-jari murni memicu orbit, sedangkan gestur 2-jari murni memicu pan + pinch-zoom.
-- **Penyimpanan Preferensi Inversi & Sensitivitas**:
-  - *Pendekatan Terpilih*: Disimpan di dalam `EngineViewModel` (dan dapat dipertahankan selama sesi aktif) dengan default yang lebih intuitif, plus toggle langsung di UI.
-  - *Alasan*: Pengguna bisa langsung merasakan efek pembalikan arah secara real-time tanpa harus membuka menu pengaturan tersembunyi.
+- **Fullscreen Surface vs Dialog Modal**:
+  - *Pendekatan*: Menghilangkan outer padding, margin, dan clipping border luar pada `Surface` di dalam `Dialog`. Menggunakan `fillMaxSize()` murni berlatar `#0B0F17`.
+  - *Alasan*: Menghilangkan celah hitam kosong di pinggiran layar smartphone landscape dan memberikan ruang vertikal maksimal untuk kanvas 3D.
+- **Rasio Split Kolom**:
+  - *Pendekatan*: Mengubah rasio dari 57%:43% menjadi 65%:35% (Preview : Info), ditambah tombol ikon maximize/minimize panel samping.
+  - *Alasan*: Pengguna ingin memeriksa detail visual mesh, tekstur, dan gerak animasi model secara leluasa.
+- **Eliminasi Redundansi Tombol Salin**:
+  - *Pendekatan*: Menghapus tombol `Salin Info Lengkap` di footer dan mempertahankannya secara elegan di barisan header atau di dalam tab *Info Lengkap*.
+  - *Alasan*: Mengurangi kepadatan tombol footer yang sebelumnya membuat tombol bertumpuk tidak beraturan.
 
 ---
 
-## 4. Technical Architecture & Data Strategy
+## 4. Technical Architecture & Component Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      Viewport3D Canvas                      │
-│                                                             │
-│   pointerInput (awaitPointerEventScope)                     │
-│    ├─ pointerCount == 1 ──► Orbit Camera (yaw / pitch)      │
-│    │                        ├─ Apply Invert X / Invert Y    │
-│    │                        └─ Apply Orbit Sensitivity      │
-│    │                                                        │
-│    └─ pointerCount >= 2 ──► Dual Gestures:                  │
-│                             ├─ Pinch Distance ─► Zoom Camera│
-│                             └─ Centroid Delta ─► Pan Camera │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      EngineViewModel                        │
-│  - cameraSettingsState:                                     │
-│      invertOrbitX: Boolean, invertOrbitY: Boolean            │
-│      orbitSensitivity: Float, panSensitivity: Float         │
-│  - camera.orbit(deltaYaw, deltaPitch)                       │
-│  - camera.zoom(deltaDistance)                               │
-│  - camera.pan(deltaX, deltaY)                               │
-│  - camera.reset(distance, pitch, yaw, target)               │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. TOP HEADER (44dp)                                                        │
+│ [Icon] Casual_Body • 1.46MB • 6424 Tris               [Salin Info] [Tutup X]│
+├─────────────────────────────────────────────────┬───────────────────────────┤
+│ 2. LEFT VIEWPORT COLUMN (weight 1.85f)          │ 3. RIGHT TAB COLUMN (1.0f)│
+│ ┌─────────────────────────────────────────────┐ │ ┌───────────────────────┐ │
+│ │ 3D Canvas Viewport (Auto-fit Model)         │ │ │ [Info] [Set] [Bones]  │ │
+│ │ [Wireframe] [Grid] [Tulang]         [Reset] │ │ ├───────────────────────┤ │
+│ │                                             │ │ │                       │ │
+│ │              [3D MODEL GLB]                 │ │ │ Tab Content Details   │ │
+│ │                                             │ │ │                       │ │
+│ └─────────────────────────────────────────────┘ │ │                       │ │
+│ ┌─────────────────────────────────────────────┐ │ │                       │ │
+│ │ Animation Bar: [▶] [Clip ▼] [===O==] [1.0x] │ │ │                       │ │
+│ └─────────────────────────────────────────────┘ │ └───────────────────────┘ │
+├─────────────────────────────────────────────────┴───────────────────────────┤
+│ 4. BOTTOM ACTION BAR (48dp)                                                 │
+│ [Batal]                                   [Simpan ke Assets] [Spawn ke Scene]│
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-### State & Event Mapping
-- `cameraSettings`: StateFlow di `EngineViewModel` memuat preferensi inversi dan sensitivitas.
-- `onPointerEvent`:
-  - 1 pointer: `deltaX * (if (invertX) -1 else 1) * sensitivity`, `deltaY * (if (invertY) 1 else -1) * sensitivity` diteruskan ke `orbitCamera`.
-  - 2 pointer: Perhitungan jarak Euclidean antar-jari untuk delta zoom, dan perpindahan titik tengah (centroid) untuk `panCamera`.
-- `Camera3D`: Menambahkan fungsi `resetView()` dan opsi preset (Front, Top, Isometric).

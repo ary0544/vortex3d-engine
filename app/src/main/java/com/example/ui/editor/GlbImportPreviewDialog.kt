@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Grid4x4
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
@@ -121,13 +122,13 @@ fun GlbImportPreviewDialog(
 ) {
     val context = LocalContext.current
 
-    // Kamera Orbit Mini Preview dengan jarak standar normalisasi (4.2m)
+    // Kamera Orbit Mini Preview dengan jarak dan skala optimal agar memenuhi frame
     val previewCamera = remember {
         Camera3D(
             target = Vec3.ZERO,
-            distance = 4.2f,
-            pitchDegrees = 20f,
-            yawDegrees = 40f
+            distance = 3.2f,
+            pitchDegrees = 15f,
+            yawDegrees = 35f
         )
     }
 
@@ -138,6 +139,7 @@ fun GlbImportPreviewDialog(
     var isWireframe by remember { mutableStateOf(false) }
     var showGrid by remember { mutableStateOf(true) }
     var showBones by remember { mutableStateOf(inspection.boneCount > 0) }
+    var isPreviewMaximized by remember { mutableStateOf(false) }
 
     // Tab Pengatur di Sisi Kanan (0: Info Lengkap, 1: Pengaturan Impor, 2: Hierarki & Tulang, 3: Animasi)
     var selectedRightTab by remember { mutableIntStateOf(0) }
@@ -181,10 +183,10 @@ fun GlbImportPreviewDialog(
         }
     }
 
-    // Normalisasi skala otomatis agar model dengan ukuran berapapun (misal 0.02m) tampil optimal
+    // Normalisasi skala otomatis agar model dengan ukuran berapapun tampil optimal dan memenuhi frame
     val maxDim = inspection.boundingBox.maxDimension
     val fitScale = remember(maxDim) {
-        if (maxDim > 0.00001f) (3.2f / maxDim) else 1.0f
+        if (maxDim > 0.00001f) (4.6f / maxDim) else 1.0f
     }
     val centerOffset = remember(inspection.boundingBox.center) {
         inspection.boundingBox.center
@@ -192,14 +194,15 @@ fun GlbImportPreviewDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true
+        )
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(6.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+                .testTag("glb_import_preview_dialog"),
             color = Color(0xFF0B0F17)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -207,8 +210,9 @@ fun GlbImportPreviewDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(44.dp)
                         .background(Color(0xFF141A24))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -218,7 +222,7 @@ fun GlbImportPreviewDialog(
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(28.dp)
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(Color(0xFF00E5FF).copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
@@ -227,26 +231,26 @@ fun GlbImportPreviewDialog(
                                 Icons.Default.ViewInAr,
                                 contentDescription = null,
                                 tint = Color(0xFF00E5FF),
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(8.dp))
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     text = inspection.modelName.ifBlank { inspection.rawMetadata.fileName },
                                     color = Color.White,
-                                    fontSize = 15.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(Modifier.width(8.dp))
+                                Spacer(Modifier.width(6.dp))
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(Color(0xFF1F6FEB))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        .padding(horizontal = 5.dp, vertical = 1.dp)
                                 ) {
                                     Text(
                                         "3D GLB Importer",
@@ -259,7 +263,7 @@ fun GlbImportPreviewDialog(
                             Text(
                                 text = "${inspection.rawMetadata.fileName} • ${inspection.rawMetadata.fileSizeFormatted} • ${inspection.mesh.vertexCount} Verts • ${inspection.mesh.triangleCount} Tris • ${inspection.boneCount} Tulang • ${animations.size} Animasi",
                                 color = Color(0xFF8B949E),
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -269,42 +273,58 @@ fun GlbImportPreviewDialog(
                     // Header Action Buttons
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Button(
+                        IconButton(
+                            onClick = { isPreviewMaximized = !isPreviewMaximized },
+                            modifier = Modifier
+                                .size(30.dp)
+                                .testTag("toggle_maximize_preview_btn")
+                        ) {
+                            Icon(
+                                imageVector = if (isPreviewMaximized) Icons.Default.ViewInAr else Icons.Default.Fullscreen,
+                                contentDescription = if (isPreviewMaximized) "Kembalikan Split View" else "Perbesar Preview Penuh",
+                                tint = if (isPreviewMaximized) Color(0xFF00E5FF) else Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        OutlinedButton(
                             onClick = {
                                 val fullInfo = inspection.formatFullInfoString()
                                 viewModel.copyToClipboard(context, fullInfo, "Info Lengkap GLB")
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF238636)),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                             modifier = Modifier
-                                .height(32.dp)
-                                .testTag("header_copy_glb_info_button")
+                                .height(30.dp)
+                                .testTag("header_copy_glb_info_button"),
+                            shape = RoundedCornerShape(6.dp)
                         ) {
                             Icon(
                                 Icons.Default.ContentCopy,
                                 contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
+                                tint = Color(0xFF00E5FF),
+                                modifier = Modifier.size(13.dp)
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                "Salin Info Lengkap GLB",
+                                "Salin Info",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
                         }
 
                         IconButton(
                             onClick = onDismiss,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier
+                                .size(30.dp)
+                                .testTag("close_glb_dialog_btn")
                         ) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "Tutup",
-                                tint = Color.White
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -321,10 +341,10 @@ fun GlbImportPreviewDialog(
                     // LEFT COLUMN: Full 3D Viewport & Interactive Player
                     Column(
                         modifier = Modifier
-                            .weight(1.35f)
+                            .weight(if (isPreviewMaximized) 1f else 1.85f)
                             .fillMaxHeight()
                             .background(Color(0xFF070A0F))
-                            .padding(6.dp)
+                            .padding(4.dp)
                     ) {
                         // 3D Canvas Viewport Box
                         Box(
@@ -557,9 +577,9 @@ fun GlbImportPreviewDialog(
                                 }
                                 IconButton(
                                     onClick = {
-                                        yawState = 40f
-                                        pitchState = 20f
-                                        distanceState = 4.2f
+                                        yawState = 35f
+                                        pitchState = 15f
+                                        distanceState = 3.2f
                                         previewCamera.yawDegrees = yawState
                                         previewCamera.pitchDegrees = pitchState
                                         previewCamera.distance = distanceState
@@ -568,7 +588,7 @@ fun GlbImportPreviewDialog(
                                 ) {
                                     Icon(
                                         Icons.Default.Refresh,
-                                        contentDescription = "Reset Kamera",
+                                        contentDescription = "Auto-Fit Kamera",
                                         tint = Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
@@ -604,13 +624,13 @@ fun GlbImportPreviewDialog(
                             )
                         }
 
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(4.dp))
 
                         // Docked Animation Player Bar
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(56.dp),
+                                .height(44.dp),
                             colors = CardDefaults.cardColors(containerColor = Color(0xFF141A24)),
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF212B3B)),
                             shape = RoundedCornerShape(8.dp)
@@ -619,33 +639,36 @@ fun GlbImportPreviewDialog(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     // Play/Pause Button
                                     IconButton(
                                         onClick = { isPlayingAnim = !isPlayingAnim },
                                         modifier = Modifier
-                                            .size(34.dp)
+                                            .size(30.dp)
                                             .clip(CircleShape)
                                             .background(if (isPlayingAnim) Color(0xFF00E5FF) else Color(0xFF238636))
+                                            .testTag("glb_preview_play_pause_btn")
                                     ) {
                                         Icon(
                                             imageVector = if (isPlayingAnim) Icons.Default.Pause else Icons.Default.PlayArrow,
                                             contentDescription = "Play/Pause",
                                             tint = if (isPlayingAnim) Color.Black else Color.White,
-                                            modifier = Modifier.size(18.dp)
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
 
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(6.dp))
 
                                     // Dropdown Pemilih Animasi
                                     Box {
                                         OutlinedButton(
                                             onClick = { animDropdownExpanded = true },
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                            modifier = Modifier.height(30.dp)
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                            modifier = Modifier
+                                                .height(30.dp)
+                                                .testTag("glb_preview_anim_dropdown_btn")
                                         ) {
                                             Text(
                                                 text = currentAnim?.name ?: "Animasi",
@@ -680,47 +703,40 @@ fun GlbImportPreviewDialog(
                                         }
                                     }
 
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(6.dp))
 
-                                    // Timeline Scrubber Slider
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        val duration = currentAnim?.duration ?: 1f
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Text(
-                                                text = String.format(Locale.US, "%.2fs", animCurrentTime),
-                                                fontSize = 9.sp,
-                                                color = Color(0xFF00E5FF)
-                                            )
-                                            Text(
-                                                text = String.format(Locale.US, "%.2fs", duration),
-                                                fontSize = 9.sp,
-                                                color = Color(0xFF8B949E)
-                                            )
-                                        }
-                                        Slider(
-                                            value = animCurrentTime.coerceIn(0f, duration),
-                                            onValueChange = {
-                                                animCurrentTime = it
-                                                isPlayingAnim = false
-                                            },
-                                            valueRange = 0f..duration,
-                                            colors = SliderDefaults.colors(
-                                                thumbColor = Color(0xFF00E5FF),
-                                                activeTrackColor = Color(0xFF00E5FF)
-                                            ),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(18.dp)
-                                        )
-                                    }
+                                    // Timeline Scrubber Slider with inlined duration labels
+                                    val duration = currentAnim?.duration ?: 1f
+                                    Text(
+                                        text = String.format(Locale.US, "%.2fs", animCurrentTime),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF00E5FF)
+                                    )
+                                    Slider(
+                                        value = animCurrentTime.coerceIn(0f, duration),
+                                        onValueChange = {
+                                            animCurrentTime = it
+                                            isPlayingAnim = false
+                                        },
+                                        valueRange = 0f..duration,
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = Color(0xFF00E5FF),
+                                            activeTrackColor = Color(0xFF00E5FF)
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp)
+                                            .height(28.dp)
+                                            .testTag("glb_preview_anim_scrubber_slider")
+                                    )
+                                    Text(
+                                        text = String.format(Locale.US, "%.2fs", duration),
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF8B949E)
+                                    )
 
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(6.dp))
 
                                     // Toggle Speed (0.5x, 1x, 2x)
                                     OutlinedButton(
@@ -731,8 +747,10 @@ fun GlbImportPreviewDialog(
                                                 else -> 1.0f
                                             }
                                         },
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(28.dp)
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                        modifier = Modifier
+                                            .height(30.dp)
+                                            .testTag("glb_preview_anim_speed_btn")
                                     ) {
                                         Text("${animSpeed}x", fontSize = 10.sp)
                                     }
@@ -748,11 +766,11 @@ fun GlbImportPreviewDialog(
                                         Icons.Default.Animation,
                                         contentDescription = null,
                                         tint = Color(0xFF8B949E),
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        text = "Model GLB ini adalah Model Statis (tidak ada track animasi).",
+                                        text = "Model GLB ini adalah Model Statis (tanpa trek animasi).",
                                         fontSize = 11.sp,
                                         color = Color(0xFF8B949E)
                                     )
@@ -761,101 +779,103 @@ fun GlbImportPreviewDialog(
                         }
                     }
 
-                    // RIGHT COLUMN: Tabs Pengatur & Informasi Lengkap GLB
-                    Column(
-                        modifier = Modifier
-                            .weight(1.0f)
-                            .fillMaxHeight()
-                            .background(Color(0xFF0E131C))
-                            .padding(6.dp)
-                    ) {
-                        TabRow(
-                            selectedTabIndex = selectedRightTab,
-                            containerColor = Color(0xFF141A24),
-                            contentColor = Color(0xFF00E5FF),
+                    // RIGHT COLUMN: Tabs Pengatur & Informasi Lengkap GLB (Bisa di-collapse untuk Maximize Viewport)
+                    if (!isPreviewMaximized) {
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .weight(1.0f)
+                                .fillMaxHeight()
+                                .background(Color(0xFF0E131C))
+                                .padding(4.dp)
                         ) {
-                            Tab(
-                                selected = selectedRightTab == 0,
-                                onClick = { selectedRightTab = 0 },
-                                text = { Text("Info Lengkap", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                            )
-                            Tab(
-                                selected = selectedRightTab == 1,
-                                onClick = { selectedRightTab = 1 },
-                                text = { Text("Pengaturan Impor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
-                            )
-                            Tab(
-                                selected = selectedRightTab == 2,
-                                onClick = { selectedRightTab = 2 },
-                                text = { Text("Hierarki & Tulang", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
-                            )
-                            Tab(
-                                selected = selectedRightTab == 3,
-                                onClick = { selectedRightTab = 3 },
-                                text = { Text("Animasi (${animations.size})", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
-                            )
-                        }
+                            TabRow(
+                                selectedTabIndex = selectedRightTab,
+                                containerColor = Color(0xFF141A24),
+                                contentColor = Color(0xFF00E5FF),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                            ) {
+                                Tab(
+                                    selected = selectedRightTab == 0,
+                                    onClick = { selectedRightTab = 0 },
+                                    text = { Text("Info Lengkap", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                                )
+                                Tab(
+                                    selected = selectedRightTab == 1,
+                                    onClick = { selectedRightTab = 1 },
+                                    text = { Text("Pengaturan", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                )
+                                Tab(
+                                    selected = selectedRightTab == 2,
+                                    onClick = { selectedRightTab = 2 },
+                                    text = { Text("Hierarki & Tulang", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                )
+                                Tab(
+                                    selected = selectedRightTab == 3,
+                                    onClick = { selectedRightTab = 3 },
+                                    text = { Text("Animasi (${animations.size})", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) }
+                                )
+                            }
 
-                        Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(4.dp))
 
-                        // TAB CONTENT CONTAINER
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF0A0E14))
-                                .border(1.dp, Color(0xFF1B2433), RoundedCornerShape(8.dp))
-                                .padding(8.dp)
-                        ) {
-                            when (selectedRightTab) {
-                                0 -> ModelFullInfoTab(
-                                    inspection = inspection,
-                                    onCopyFullInfo = {
-                                        viewModel.copyToClipboard(
-                                            context,
-                                            inspection.formatFullInfoString(),
-                                            "Info Lengkap GLB"
-                                        )
-                                    }
-                                )
-                                1 -> ImportSettingsTab(
-                                    inspection = inspection,
-                                    modelScale = modelScale,
-                                    onScaleChange = { modelScale = it },
-                                    selectedCollider = selectedCollider,
-                                    onColliderChange = { selectedCollider = it },
-                                    selectedRole = selectedRole,
-                                    onRoleChange = { selectedRole = it },
-                                    onCopyPath = {
-                                        viewModel.copyToClipboard(
-                                            context,
-                                            inspection.rawMetadata.recommendedFolder,
-                                            "Path Folder Rekomendasi"
-                                        )
-                                    },
-                                    onCopyFullGlbInfo = {
-                                        viewModel.copyToClipboard(
-                                            context,
-                                            inspection.formatFullInfoString(),
-                                            "Spesifikasi Lengkap GLB"
-                                        )
-                                    }
-                                )
-                                2 -> NodeTreeAndSkeletonTab(inspection)
-                                3 -> AnimationsListTab(
-                                    animations = animations,
-                                    selectedAnimIndex = selectedAnimIndex,
-                                    onSelectAnimation = {
-                                        selectedAnimIndex = it
-                                        animCurrentTime = 0f
-                                        isPlayingAnim = true
-                                    }
-                                )
+                            // TAB CONTENT CONTAINER
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF0A0E14))
+                                    .border(1.dp, Color(0xFF1B2433), RoundedCornerShape(8.dp))
+                                    .padding(6.dp)
+                            ) {
+                                when (selectedRightTab) {
+                                    0 -> ModelFullInfoTab(
+                                        inspection = inspection,
+                                        onCopyFullInfo = {
+                                            viewModel.copyToClipboard(
+                                                context,
+                                                inspection.formatFullInfoString(),
+                                                "Info Lengkap GLB"
+                                            )
+                                        }
+                                    )
+                                    1 -> ImportSettingsTab(
+                                        inspection = inspection,
+                                        modelScale = modelScale,
+                                        onScaleChange = { modelScale = it },
+                                        selectedCollider = selectedCollider,
+                                        onColliderChange = { selectedCollider = it },
+                                        selectedRole = selectedRole,
+                                        onRoleChange = { selectedRole = it },
+                                        onCopyPath = {
+                                            viewModel.copyToClipboard(
+                                                context,
+                                                inspection.rawMetadata.recommendedFolder,
+                                                "Path Folder Rekomendasi"
+                                            )
+                                        },
+                                        onCopyFullGlbInfo = {
+                                            viewModel.copyToClipboard(
+                                                context,
+                                                inspection.formatFullInfoString(),
+                                                "Spesifikasi Lengkap GLB"
+                                            )
+                                        }
+                                    )
+                                    2 -> NodeTreeAndSkeletonTab(inspection)
+                                    3 -> AnimationsListTab(
+                                        animations = animations,
+                                        selectedAnimIndex = selectedAnimIndex,
+                                        onSelectAnimation = {
+                                            selectedAnimIndex = it
+                                            animCurrentTime = 0f
+                                            isPlayingAnim = true
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -865,47 +885,41 @@ fun GlbImportPreviewDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(48.dp)
                         .background(Color(0xFF141A24))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     OutlinedButton(
                         onClick = onDismiss,
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                        modifier = Modifier.height(34.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                        modifier = Modifier
+                            .height(34.dp)
+                            .testTag("cancel_glb_import_button"),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Batal", fontSize = 12.sp)
+                        Text("Batal", fontSize = 12.sp, color = Color(0xFFE6EDF3))
                     }
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        OutlinedButton(
-                            onClick = {
-                                val fullInfo = inspection.formatFullInfoString()
-                                viewModel.copyToClipboard(context, fullInfo, "Info Lengkap GLB")
-                            },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier
-                                .height(34.dp)
-                                .testTag("bottom_copy_glb_info_btn")
-                        ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF00E5FF))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Salin Info Lengkap", fontSize = 11.sp, color = Color(0xFF00E5FF))
-                        }
-
                         OutlinedButton(
                             onClick = {
                                 inspection.file?.let { viewModel.importGlbToAssets(it) }
                                 onDismiss()
                             },
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(34.dp)
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                            modifier = Modifier
+                                .height(34.dp)
+                                .testTag("save_glb_to_assets_only_button"),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("Simpan ke Assets Saja", fontSize = 12.sp)
+                            Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color(0xFF8B949E))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Simpan ke Assets Saja", fontSize = 12.sp, color = Color(0xFFE6EDF3))
                         }
 
                         Button(
@@ -919,10 +933,11 @@ fun GlbImportPreviewDialog(
                                 onDismiss()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 0.dp),
                             modifier = Modifier
                                 .height(34.dp)
-                                .testTag("confirm_spawn_glb_button")
+                                .testTag("confirm_spawn_glb_button"),
+                            shape = RoundedCornerShape(8.dp)
                         ) {
                             Icon(Icons.Default.ViewInAr, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
